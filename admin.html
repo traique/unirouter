@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UniRouter</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--panel2:#f1f3f6;--text:#16181d;--muted:#667085;--line:#e4e7ec;--accent:#2f6fed;--accent-weak:#e8effd;
+--btn:#2f6fed;--ok:#12a150;--warn:#d98a00;--bad:#d92d20;--radius:10px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--panel:#171a21;--panel2:#1f232c;--text:#e6e8ec;--muted:#98a2b3;--line:#2a2f3a;
+--accent:#6b9bff;--accent-weak:#1c2740;--btn:#3563d6;--ok:#32c26f;--warn:#f0a72a;--bad:#ff6b5e}}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent)}button,input,select,textarea{font:inherit;color:inherit}
+.layout{display:flex;min-height:100vh}
+nav.side{width:210px;flex:none;border-right:1px solid var(--line);background:var(--panel);padding:16px 10px;position:sticky;top:0;height:100vh}
+.brand{font-weight:700;font-size:16px;padding:4px 10px 16px;display:flex;gap:8px;align-items:center}
+.brand small{color:var(--muted);font-weight:500;font-size:12px}
+nav.side button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--muted)}
+nav.side button.active{background:var(--accent-weak);color:var(--accent);font-weight:600}
+nav.side .foot{position:absolute;bottom:14px;left:10px;right:10px}
+main{flex:1;min-width:0;padding:22px 26px 60px;max-width:1200px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:0 0 10px}h3{font-size:14px;margin:0}
+.sub{color:var(--muted);margin:0 0 18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.stat .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}.stat .l{color:var(--muted);font-size:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row.between{justify-content:space-between}
+.btn{border:1px solid var(--line);background:var(--panel);padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}.btn.primary{background:var(--btn);border-color:var(--btn);color:#fff}
+.btn.danger{color:var(--bad)}.btn.sm{padding:3px 9px;font-size:12px}.btn:disabled{opacity:.5;cursor:default}
+input[type=text],input[type=password],input[type=number],select,textarea{border:1px solid var(--line);background:var(--panel2);border-radius:8px;padding:7px 10px;width:100%}
+textarea{font-family:var(--mono);font-size:12px;min-height:70px}
+label.f{display:block;margin-bottom:10px}label.f span{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}.chip{background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:1px 9px;font-size:12px;font-family:var(--mono)}
+.badge{display:inline-block;font-size:11px;padding:1px 7px;border-radius:20px;background:var(--panel2);color:var(--muted);border:1px solid var(--line)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.muted{color:var(--muted)}.mono{font-family:var(--mono);font-size:12px}
+.dot.ok{background:var(--ok)}.dot.error{background:var(--bad)}.dot.cooldown{background:var(--warn)}.dot.disabled{background:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:500;font-size:12px}.tbl{overflow-x:auto}
+.conn{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line)}
+.conn .info{flex:1;min-width:0}.conn .err{color:var(--bad);font-size:12px;word-break:break-word}
+.alert{border-radius:8px;padding:10px 12px;margin-bottom:10px;background:#fff6e5;color:#7a4b00;border:1px solid #f5d79e}
+@media (prefers-color-scheme:dark){.alert{background:#2b2210;color:#f5cf86;border-color:#5b4515}}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+.modal{background:var(--panel);border-radius:12px;padding:20px;width:100%;max-width:560px;max-height:90vh;overflow:auto;border:1px solid var(--line)}
+.code{font-family:var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-all;font-size:12px}
+.big-code{font-size:30px;letter-spacing:4px;font-weight:700;text-align:center;font-family:var(--mono);padding:14px;background:var(--accent-weak);border-radius:10px;margin:10px 0}
+#toast{position:fixed;bottom:18px;right:18px;background:var(--text);color:var(--bg);padding:9px 14px;border-radius:8px;display:none;max-width:380px;z-index:20}
+.chart{display:flex;align-items:flex-end;gap:2px;height:110px}.chart div{flex:1;background:var(--accent);border-radius:2px 2px 0 0;min-height:1px;opacity:.85}
+.chart div.e{background:var(--bad)}
+.login{max-width:340px;margin:12vh auto}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.hide{display:none!important}
+@media (max-width:760px){.layout{display:block}nav.side{width:auto;height:auto;position:sticky;top:0;z-index:5;display:flex;overflow-x:auto;padding:8px;border-right:0;border-bottom:1px solid var(--line)}
+.brand{display:none}nav.side button{width:auto;flex:none}nav.side .foot{position:static}main{padding:16px}
+.conn{flex-wrap:wrap}.conn .info{flex-basis:calc(100% - 20px)}.conn>.row{padding-left:18px}}
+</style>
+</head>
+<body>
+<div id="login" class="login hide">
+  <div class="card">
+    <h1>UniRouter</h1><p class="sub">Đăng nhập trang quản trị</p>
+    <div id="loginMsg" class="alert hide"></div>
+    <form id="loginForm">
+      <label class="f"><span>Tài khoản</span><input type="text" id="lu" value="admin" autocomplete="username"></label>
+      <label class="f"><span>Mật khẩu</span><input type="password" id="lp" autocomplete="current-password"></label>
+      <button class="btn primary" style="width:100%">Đăng nhập</button>
+    </form>
+  </div>
+</div>
+
+<div id="app" class="layout hide">
+  <nav class="side">
+    <div class="brand">UniRouter <small id="ver"></small></div>
+    <button data-tab="overview" class="active">Tổng quan</button>
+    <button data-tab="providers">Providers</button>
+    <button data-tab="combos">Combo / Alias</button>
+    <button data-tab="keys">API Keys</button>
+    <button data-tab="playground">Thử nghiệm</button>
+    <button data-tab="settings">Cài đặt</button>
+    <div class="foot"><button id="logout">Đăng xuất</button></div>
+  </nav>
+  <main>
+    <!-- OVERVIEW -->
+    <section id="tab-overview">
+      <div class="row between"><div><h1>Tổng quan</h1><p class="sub">Hoạt động của gateway</p></div>
+        <select id="hours" style="width:auto"><option value="1">1 giờ</option><option value="24" selected>24 giờ</option><option value="168">7 ngày</option></select></div>
+      <div id="warns"></div>
+      <div class="grid" id="stats"></div>
+      <div class="card" style="margin-top:14px"><div class="row between"><h2>Request theo thời gian</h2><span class="muted" id="chartInfo"></span></div><div class="chart" id="chart"></div></div>
+      <div class="card"><h2>Theo model</h2><div class="tbl"><table id="byModel"></table></div></div>
+      <div class="card"><h2>Request gần đây</h2><div class="tbl"><table id="recent"></table></div></div>
+    </section>
+
+    <!-- PROVIDERS -->
+    <section id="tab-providers" class="hide">
+      <div class="row between"><div><h1>Providers</h1><p class="sub">Thêm API key hoặc đăng nhập ChatGPT. Mỗi provider có thể có nhiều tài khoản để xoay vòng.</p></div>
+        <button class="btn" id="addProvider">+ Provider tùy chỉnh</button></div>
+      <div id="providerList"></div>
+    </section>
+
+    <!-- COMBOS -->
+    <section id="tab-combos" class="hide">
+      <div class="row between"><div><h1>Combo / Alias</h1><p class="sub">Một tên model ảo trỏ tới nhiều model thật. Bot gọi tên combo, router tự chọn và tự chuyển khi lỗi.</p></div>
+        <button class="btn primary" id="addCombo">+ Tạo combo</button></div>
+      <div id="comboList"></div>
+    </section>
+
+    <!-- KEYS -->
+    <section id="tab-keys" class="hide">
+      <div class="row between"><div><h1>API Keys</h1><p class="sub">Key cho từng client/bot. Key chỉ hiện 1 lần lúc tạo.</p></div>
+        <button class="btn primary" id="addKey">+ Tạo key</button></div>
+      <div class="card"><div class="tbl"><table id="keyTable"></table></div></div>
+    </section>
+
+    <!-- PLAYGROUND -->
+    <section id="tab-playground" class="hide">
+      <h1>Thử nghiệm</h1><p class="sub">Gửi thử 1 tin nhắn qua router (không cần API key).</p>
+      <div class="card">
+        <label class="f"><span>Model hoặc combo</span><input type="text" id="pgModel" list="modelOptions" placeholder="vd: cx/gpt-5.5 hoặc tên combo"></label>
+        <label class="f"><span>System prompt (tùy chọn)</span><input type="text" id="pgSystem"></label>
+        <label class="f"><span>Tin nhắn</span><textarea id="pgMsg" style="font-family:inherit;font-size:14px">Xin chào! Bạn là model nào?</textarea></label>
+        <button class="btn primary" id="pgSend">Gửi</button>
+      </div>
+      <div class="card hide" id="pgOut"></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="tab-settings" class="hide">
+      <h1>Cài đặt</h1><p class="sub">Áp dụng ngay, không cần khởi động lại.</p>
+      <div class="card">
+        <h2>Định tuyến</h2>
+        <label class="f"><span>Model mặc định (dùng khi client gửi model không tồn tại, vd bot gọi "gpt-4o")</span><input type="text" id="sDefault" list="modelOptions" placeholder="tên combo hoặc provider/model"></label>
+        <label class="switch f"><input type="checkbox" id="sFallback"> Tự chuyển model lạ sang model mặc định</label>
+        <label class="switch f"><input type="checkbox" id="sRtk"> RTK Token Saver: nén output của tool (git diff, grep, log...) trước khi gửi</label>
+        <div class="grid">
+          <label class="f"><span>Circuit breaker: số lỗi liên tiếp</span><input type="number" id="sThr" min="1" max="20"></label>
+          <label class="f"><span>Circuit breaker: thời gian nghỉ (giây)</span><input type="number" id="sCool" min="5" max="3600"></label>
+          <label class="f"><span>Giữ log sử dụng (ngày)</span><input type="number" id="sDays" min="1" max="90"></label>
+          <label class="f"><span>Số dòng log tối đa</span><input type="number" id="sRows" min="1000" max="500000"></label>
+        </div>
+        <button class="btn primary" id="saveSettings">Lưu cài đặt</button>
+      </div>
+      <div class="card">
+        <h2>Cách kết nối client</h2>
+        <div id="howto"></div>
+      </div>
+    </section>
+  </main>
+</div>
+<datalist id="modelOptions"></datalist>
+<div id="toast"></div>
+<div id="modalRoot"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = n => n == null ? "–" : Number(n).toLocaleString("vi-VN");
+const ago = ms => { if (!ms) return "–"; const s = (Date.now() - ms) / 1000;
+  if (s < 60) return Math.floor(s) + "s trước"; if (s < 3600) return Math.floor(s/60) + " phút trước";
+  if (s < 86400) return Math.floor(s/3600) + " giờ trước"; return Math.floor(s/86400) + " ngày trước"; };
+const dur = s => s < 60 ? s + "s" : s < 3600 ? Math.ceil(s/60) + " phút" : (s/3600).toFixed(1) + " giờ";
+let providers = [], combos = [];
+
+function toast(msg, bad) { const t = $("#toast"); t.textContent = msg; t.style.background = bad ? "var(--bad)" : "";
+  t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 3500); }
+
+async function api(path, opts = {}) {
+  const o = { method: opts.method || (opts.body !== undefined ? "POST" : "GET"), headers: { "X-Requested-With": "unirouter" } };
+  if (opts.body !== undefined) { o.headers["Content-Type"] = "application/json"; o.body = JSON.stringify(opts.body); }
+  const r = await fetch(path, o);
+  let data = null; try { data = await r.json(); } catch (e) {}
+  if (r.status === 401 && path !== "/admin/api/login") { showLogin(); throw new Error("Cần đăng nhập"); }
+  if (!r.ok) throw new Error((data && (data.detail || data.error?.message)) || ("HTTP " + r.status));
+  return data;
+}
+const run = fn => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, true); } };
+
+function modal(html, onMount) {
+  const root = $("#modalRoot");
+  root.innerHTML = `<div class="modal-bg"><div class="modal">${html}</div></div>`;
+  const bg = root.firstChild;
+  bg.addEventListener("click", e => { if (e.target === bg) closeModal(); });
+  if (onMount) onMount(bg.firstChild);
+}
+function closeModal() { $("#modalRoot").innerHTML = ""; if (window._poll) { clearTimeout(window._poll); window._poll = null; } }
+
+// ---------------------------------------------------------------- auth
+function showLogin(msg) { $("#app").classList.add("hide"); $("#login").classList.remove("hide");
+  if (msg) { $("#loginMsg").textContent = msg; $("#loginMsg").classList.remove("hide"); } }
+$("#loginForm").addEventListener("submit", run(async e => {
+  e.preventDefault();
+  await api("/admin/api/login", { body: { username: $("#lu").value, password: $("#lp").value } });
+  start();
+}));
+$("#logout").addEventListener("click", run(async () => { await api("/admin/api/logout", { body: {} }); showLogin(); }));
+
+// ---------------------------------------------------------------- tabs
+let current = "overview";
+document.querySelectorAll("nav.side button[data-tab]").forEach(b => b.addEventListener("click", () => openTab(b.dataset.tab)));
+function openTab(name) {
+  current = name;
+  document.querySelectorAll("nav.side button[data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll("main > section").forEach(s => s.classList.toggle("hide", s.id !== "tab-" + name));
+  try { localStorage.setItem("uni-tab", name); } catch (e) {}
+  ({ overview: loadOverview, providers: loadProviders, combos: loadCombos, keys: loadKeys, settings: loadSettings,
+     playground: refreshModelOptions })[name]?.();
+}
+
+// ---------------------------------------------------------------- overview
+$("#hours").addEventListener("change", () => loadOverview());
+const loadOverview = run(async () => {
+  const d = await api("/admin/api/overview?hours=" + $("#hours").value);
+  $("#ver").textContent = "v" + d.version;
+  $("#warns").innerHTML = d.warnings.map(w => `<div class="alert">${esc(w)}</div>`).join("");
+  const t = d.stats.total, ok = t.n ? Math.round(100 * (t.ok || 0) / t.n) : 0;
+  const stats = [["Request", fmt(t.n)], ["Thành công", t.n ? ok + "%" : "–"], ["Token vào", fmt(t.inp)], ["Token ra", fmt(t.outp)],
+    ["RTK tiết kiệm", t.rtk ? "~" + fmt(Math.round(t.rtk / 4)) + " tok" : "–"], ["Độ trễ TB", t.lat ? fmt(Math.round(t.lat)) + " ms" : "–"],
+    ["Tài khoản khỏe", `${d.counts.healthy}/${d.counts.connections}`], ["Combo / Key", `${d.counts.combos} / ${d.counts.keys}`]];
+  $("#stats").innerHTML = stats.map(([l, v]) => `<div class="card stat" style="margin:0"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+  const bms = d.stats.bucket_ms, nb = Math.min(168, Math.ceil(d.stats.hours * 3600000 / bms));
+  const endB = Math.floor(Date.now() / bms) * bms, byB = Object.fromEntries(d.stats.series.map(s => [s.b, s]));
+  const series = Array.from({ length: nb }, (_, i) => { const b = endB - (nb - 1 - i) * bms; return byB[b] || { b, n: 0, err: 0 }; });
+  const max = Math.max(1, ...series.map(s => s.n));
+  $("#chart").innerHTML = d.stats.series.length ? series.map(s => `<div title="${new Date(s.b).toLocaleString("vi-VN")}: ${s.n} request, ${s.err} lỗi"
+    class="${s.err > s.n / 2 ? "e" : ""}" style="height:${Math.max(2, 100 * s.n / max)}%"></div>`).join("") : `<span class="muted">Chưa có dữ liệu</span>`;
+  $("#chartInfo").textContent = `mỗi cột = ${d.stats.bucket_ms >= 3600000 ? "1 giờ" : "5 phút"}`;
+  $("#byModel").innerHTML = `<tr><th>Provider / model</th><th>Request</th><th>Thành công</th><th>Token vào/ra</th><th>TTFB TB</th></tr>` +
+    (d.stats.by_model.map(r => `<tr><td class="mono">${esc(r.provider)}/${esc(r.model)}</td><td>${fmt(r.n)}</td>
+      <td>${Math.round(100 * r.ok / r.n)}%</td><td>${fmt(r.inp)} / ${fmt(r.outp)}</td><td>${r.ttfb ? fmt(Math.round(r.ttfb)) + " ms" : "–"}</td></tr>`).join("")
+      || `<tr><td colspan="5" class="muted">Chưa có dữ liệu</td></tr>`);
+  $("#recent").innerHTML = `<tr><th>Lúc</th><th>Key</th><th>API</th><th>Model gọi</th><th>Đích thực tế</th><th>Kết quả</th><th>Thời gian</th><th>Token</th></tr>` +
+    (d.stats.recent.map(r => `<tr><td>${ago(r.ts)}</td><td>${esc(r.key_name)}</td><td>${esc(r.endpoint)}</td><td class="mono">${esc(r.requested_model)}</td>
+      <td class="mono">${r.provider ? esc(r.provider + "/" + r.model) : "–"}${r.attempts > 1 ? ` <span class="badge" title="số lượt thử">×${r.attempts}</span>` : ""}</td>
+      <td class="${r.status < 400 ? "ok" : "bad"}" title="${esc(r.error || "")}">${r.status}${r.error ? " ⓘ" : ""}</td>
+      <td>${r.latency_ms != null ? fmt(r.latency_ms) + " ms" : "–"}</td><td>${fmt(r.input_tokens)} / ${fmt(r.output_tokens)}</td></tr>`).join("")
+      || `<tr><td colspan="8" class="muted">Chưa có request nào</td></tr>`);
+});
+
+// ---------------------------------------------------------------- providers
+const loadProviders = run(async () => {
+  providers = (await api("/admin/api/providers")).data;
+  refreshModelOptions();
+  const sorted = [...providers].sort((a, b) => (b.connections.length > 0) - (a.connections.length > 0));
+  $("#providerList").innerHTML = sorted.map(providerCard).join("");
+});
+
+function providerCard(p) {
+  const conns = p.connections.map(c => {
+    const who = c.meta?.email ? `${esc(c.meta.email)}${c.meta.plan ? ` · ${esc(c.meta.plan)}` : ""}` : (c.key_hint ? `key ${esc(c.key_hint)}` : "");
+    const exp = c.expires_at ? ` · token hết hạn ${new Date(c.expires_at).toLocaleString("vi-VN")}` : "";
+    const health = { ok: "Khỏe", error: "Lỗi", cooldown: "Tạm khóa " + dur(c.blocked_for), disabled: "Đã tắt" }[c.health];
+    return `<div class="conn"><span class="dot ${c.health}" style="margin-top:7px" title="${health}"></span>
+      <div class="info"><div><b>${esc(c.label)}</b> <span class="badge">${health}</span></div>
+        <div class="muted" style="font-size:12px">${who}${exp} · dùng ${ago(c.last_used_at)}</div>
+        ${c.block_reason ? `<div class="err">${esc(c.block_reason)}</div>` : c.last_error ? `<div class="err">${esc(c.last_error)}</div>` : ""}</div>
+      <div class="row">
+        <button class="btn sm" onclick="testConn('${c.id}')">Test</button>
+        ${p.type === "codex" ? `<button class="btn sm" onclick="quota('${c.id}')">Hạn mức</button>` : ""}
+        ${c.health === "cooldown" || c.health === "error" ? `<button class="btn sm" onclick="resetConn('${c.id}')">Mở khóa</button>` : ""}
+        <button class="btn sm" onclick="toggleConn('${c.id}', ${!c.enabled})">${c.enabled ? "Tắt" : "Bật"}</button>
+        <button class="btn sm danger" onclick="delConn('${c.id}')">Xóa</button></div></div>`;
+  }).join("");
+  const add = p.type === "codex"
+    ? `<button class="btn primary sm" onclick="codexLogin('${p.id}')">Đăng nhập ChatGPT</button>
+       <button class="btn sm" onclick="codexImport('${p.id}')">Nhập auth.json / token</button>`
+    : `<button class="btn primary sm" onclick="addKey('${p.id}')">+ Thêm API key</button>`;
+  return `<div class="card">
+    <div class="row between"><div class="row"><span class="dot ${!p.enabled || !p.connections.length ? "disabled" : p.connections.some(c => c.health === "ok") ? "ok" : p.connections.some(c => c.health === "cooldown") ? "cooldown" : "error"}"></span>
+      <h3>${esc(p.name)}</h3><span class="badge mono">${esc(p.alias)}/</span><span class="badge">${p.type === "codex" ? "OAuth" : "API key"}</span>
+      ${p.enabled ? "" : `<span class="badge">đang tắt</span>`}</div>
+      <div class="row">${add}<button class="btn sm" onclick="editProvider('${p.id}')">Sửa</button>
+        <button class="btn sm" onclick="toggleProvider('${p.id}', ${!p.enabled})">${p.enabled ? "Tắt" : "Bật"}</button></div></div>
+    ${p.note ? `<div class="muted" style="font-size:12px;margin-top:6px">${esc(p.note)}</div>` : ""}
+    <div class="chips" style="margin-top:10px">${p.models.map(m => `<span class="chip" title="${p.latency[m] ? "TTFB ~" + p.latency[m] + " ms" : ""}">${esc(m)}</span>`).join("") || `<span class="muted">chưa có model</span>`}</div>
+    <div style="margin-top:10px">${conns || `<div class="muted" style="font-size:13px;border-top:1px solid var(--line);padding-top:8px">Chưa có tài khoản nào</div>`}</div>
+  </div>`;
+}
+
+window.testConn = run(async id => {
+  toast("Đang test…");
+  const r = await api(`/admin/api/connections/${id}/test`, { body: {} });
+  r.ok ? toast(`OK (${r.ms} ms, ${r.model}): ${r.reply}`) : toast(`Lỗi ${r.status || ""}: ${r.error}`, true);
+  loadProviders();
+});
+window.resetConn = run(async id => { await api(`/admin/api/connections/${id}/reset`, { body: {} }); loadProviders(); });
+window.toggleConn = run(async (id, en) => { await api(`/admin/api/connections/${id}`, { method: "PATCH", body: { enabled: en } }); loadProviders(); });
+window.delConn = run(async id => { if (!confirm("Xóa tài khoản này?")) return; await api(`/admin/api/connections/${id}`, { method: "DELETE" }); loadProviders(); });
+window.toggleProvider = run(async (id, en) => { await api("/admin/api/providers", { body: { id, enabled: en } }); loadProviders(); });
+window.quota = run(async id => {
+  const d = await api(`/admin/api/connections/${id}/quota`);
+  const rows = [];
+  const walk = (o, path) => { if (o && typeof o === "object") { for (const [k, v] of Object.entries(o)) walk(v, path ? path + "." + k : k); }
+    else if (/percent|reset|limit|plan|remaining|used/i.test(path)) rows.push([path, o]); };
+  walk(d, "");
+  modal(`<h2>Hạn mức ChatGPT</h2>${rows.length ? `<table>${rows.map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td>${esc(/reset.*_at$/.test(k) && v > 1e9 ? new Date(v * 1000).toLocaleString("vi-VN") : v)}</td></tr>`).join("")}</table>` : ""}
+    <details style="margin-top:10px"><summary class="muted">Dữ liệu gốc</summary><div class="code">${esc(JSON.stringify(d, null, 2))}</div></details>
+    <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Đóng</button></div>`);
+});
+
+window.addKey = pid => {
+  const p = providers.find(x => x.id === pid);
+  modal(`<h2>Thêm API key: ${esc(p.name)}</h2>
+    <label class="f"><span>Tên gợi nhớ</span><input type="text" id="mkLabel" value="${esc(p.name)}"></label>
+    <label class="f"><span>API key (mỗi dòng 1 key: thêm nhiều key để xoay vòng)</span><textarea id="mkKey" placeholder="sk-..."></textarea></label>
+    <div class="row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="mkSave">Lưu</button></div>`,
+    m => m.querySelector("#mkSave").onclick = run(async () => {
+      const r = await api(`/admin/api/providers/${pid}/connections`, { body: { label: $("#mkLabel").value, api_key: $("#mkKey").value } });
+      closeModal(); toast(`Đã thêm ${r.added} key`); loadProviders();
+    }));
+};
+
+window.codexLogin = run(async pid => {
+  const d = await api("/admin/api/codex/device/start", { body: { provider_id: pid } });
+  modal(`<h2>Đăng nhập ChatGPT</h2>
+    <ol style="padding-left:18px"><li>Mở <a href="${esc(d.verification_url)}" target="_blank" rel="noopener">${esc(d.verification_url)}</a> và đăng nhập tài khoản ChatGPT.</li>
+    <li>Nhập mã sau:</li></ol><div class="big-code">${esc(d.user_code)}</div>
+    <div class="row between"><span class="muted" id="cxStatus">Đang chờ xác nhận…</span>
+      <div class="row"><button class="btn sm" onclick="navigator.clipboard.writeText('${esc(d.user_code)}');toast('Đã copy mã')">Copy mã</button>
+      <button class="btn" onclick="closeModal()">Đóng</button></div></div>`);
+  const poll = async () => {
+    try {
+      const r = await api("/admin/api/codex/device/poll", { body: { login_id: d.login_id } });
+      if (r.status === "completed") { closeModal(); toast("Đã thêm tài khoản ChatGPT"); loadProviders(); return; }
+      if (r.status !== "pending") { $("#cxStatus").textContent = "Phiên đăng nhập: " + r.status; return; }
+    } catch (e) { const s = $("#cxStatus"); if (s) s.textContent = e.message; return; }
+    window._poll = setTimeout(poll, (d.interval || 5) * 1000);
+  };
+  window._poll = setTimeout(poll, (d.interval || 5) * 1000);
+});
+
+window.codexImport = pid => modal(`<h2>Nhập tài khoản ChatGPT</h2>
+  <p class="muted">Dán nội dung file <span class="mono">~/.codex/auth.json</span> (sau khi chạy <span class="mono">codex login</span> trên máy bạn), hoặc dán refresh token. Dùng cách này khi đăng nhập thiết bị bị chặn trên máy chủ.</p>
+  <label class="f"><span>Tên gợi nhớ (tùy chọn)</span><input type="text" id="ciLabel"></label>
+  <label class="f"><span>auth.json hoặc refresh token</span><textarea id="ciText" style="min-height:120px"></textarea></label>
+  <div class="row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="ciSave">Nhập</button></div>`,
+  m => m.querySelector("#ciSave").onclick = run(async () => {
+    await api("/admin/api/codex/import", { body: { provider_id: pid, label: $("#ciLabel").value, text: $("#ciText").value } });
+    closeModal(); toast("Đã nhập tài khoản"); loadProviders();
+  }));
+
+function providerForm(p) {
+  const isNew = !p;
+  p = p || { id: "", alias: "", name: "", type: "openai", base_url: "https://", models: [], headers: {}, options: {}, note: "" };
+  modal(`<h2>${isNew ? "Thêm provider tương thích OpenAI" : "Sửa " + esc(p.name)}</h2>
+    <div class="grid"><label class="f"><span>ID</span><input type="text" id="pfId" value="${esc(p.id)}" ${isNew ? "" : "disabled"} placeholder="vd: myapi"></label>
+    <label class="f"><span>Alias (tiền tố model)</span><input type="text" id="pfAlias" value="${esc(p.alias)}" placeholder="vd: my"></label></div>
+    <label class="f"><span>Tên hiển thị</span><input type="text" id="pfName" value="${esc(p.name)}"></label>
+    <label class="f"><span>Base URL ${p.type === "codex" ? "" : "(phần trước /chat/completions)"}</span><input type="text" id="pfUrl" value="${esc(p.base_url)}"></label>
+    <label class="f"><span>Model (mỗi dòng 1 model)</span><textarea id="pfModels">${esc(p.models.join("\n"))}</textarea></label>
+    ${isNew ? "" : `<button class="btn sm" id="pfFetch" style="margin:-4px 0 10px">Lấy danh sách model từ provider</button><div id="pfFetched" class="chips" style="margin-bottom:10px"></div>`}
+    <label class="f"><span>Header thêm (JSON)</span><textarea id="pfHeaders">${esc(JSON.stringify(p.headers || {}, null, 1))}</textarea></label>
+    <label class="f"><span>Tùy chọn (JSON). vd: {"account_strategy":"fill_first","stream_usage":false}</span><textarea id="pfOptions">${esc(JSON.stringify(p.options || {}, null, 1))}</textarea></label>
+    <div class="row between">${!isNew && !p.builtin ? `<button class="btn danger" id="pfDel">Xóa provider</button>` : "<span></span>"}
+      <div class="row"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="pfSave">Lưu</button></div></div>`, m => {
+    m.querySelector("#pfSave").onclick = run(async () => {
+      let headers, options;
+      try { headers = JSON.parse($("#pfHeaders").value || "{}"); options = JSON.parse($("#pfOptions").value || "{}"); }
+      catch (e) { throw new Error("Header/Tùy chọn phải là JSON hợp lệ"); }
+      await api("/admin/api/providers", { body: { id: isNew ? $("#pfId").value : p.id, alias: $("#pfAlias").value, name: $("#pfName").value,
+        type: p.type, base_url: $("#pfUrl").value, models: $("#pfModels").value, headers, options } });
+      closeModal(); toast("Đã lưu"); loadProviders();
+    });
+    const f = m.querySelector("#pfFetch");
+    if (f) f.onclick = run(async () => {
+      f.disabled = true; f.textContent = "Đang lấy…";
+      try {
+        const r = await api(`/admin/api/providers/${p.id}/fetch-models`, { body: {} });
+        $("#pfFetched").innerHTML = r.models.map(x => `<span class="chip" style="cursor:pointer" title="Bấm để thêm">${esc(x)}</span>`).join("") || "Không có model";
+        $("#pfFetched").querySelectorAll(".chip").forEach(ch => ch.onclick = () => {
+          const ta = $("#pfModels"); const list = ta.value.split("\n").map(s => s.trim()).filter(Boolean);
+          if (!list.includes(ch.textContent)) { list.push(ch.textContent); ta.value = list.join("\n"); } ch.style.opacity = .4; });
+        f.textContent = `${r.models.length} model (bấm để thêm)`;
+      } finally { f.disabled = false; }
+    });
+    const d = m.querySelector("#pfDel");
+    if (d) d.onclick = run(async () => { if (!confirm("Xóa provider và toàn bộ key của nó?")) return;
+      await api(`/admin/api/providers/${p.id}`, { method: "DELETE" }); closeModal(); loadProviders(); });
+  });
+}
+window.editProvider = id => providerForm(providers.find(p => p.id === id));
+$("#addProvider").onclick = () => providerForm(null);
+
+async function refreshModelOptions() {
+  try {
+    if (!providers.length) providers = (await api("/admin/api/providers")).data;
+    if (!combos.length) combos = (await api("/admin/api/combos")).data;
+  } catch (e) { return; }
+  const opts = [...combos.map(c => c.name), ...providers.filter(p => p.enabled).flatMap(p => p.models.map(m => `${p.alias}/${m}`))];
+  $("#modelOptions").innerHTML = opts.map(o => `<option value="${esc(o)}">`).join("");
+}
+
+// ---------------------------------------------------------------- combos
+const STRAT = { priority: "Ưu tiên (lần lượt khi lỗi)", round_robin: "Xoay vòng", least_latency: "Nhanh nhất", random: "Ngẫu nhiên" };
+const loadCombos = run(async () => {
+  combos = (await api("/admin/api/combos")).data;
+  refreshModelOptions();
+  $("#comboList").innerHTML = combos.map((c, i) => `<div class="card"><div class="row between">
+      <div class="row"><h3 class="mono">${esc(c.name)}</h3><span class="badge">${STRAT[c.strategy]}</span>${c.enabled ? "" : `<span class="badge">đang tắt</span>`}</div>
+      <div class="row"><button class="btn sm" onclick="editCombo(${i})">Sửa</button><button class="btn sm danger" onclick="delCombo(${i})">Xóa</button></div></div>
+      ${c.note ? `<div class="muted" style="font-size:12px">${esc(c.note)}</div>` : ""}
+      <ol style="margin:10px 0 0;padding-left:20px">${c.resolved.map(r => `<li class="mono">${esc(r.spec)} ${r.ok ? (r.targets.length > 1 || r.targets[0] !== r.spec ? `<span class="muted">→ ${esc(r.targets.join(", "))}</span>` : "") : `<span class="bad">${esc(r.error)}</span>`}</li>`).join("")}</ol>
+    </div>`).join("") || `<div class="card muted">Chưa có combo. Ví dụ: tạo combo tên <span class="mono">gpt-4o</span> trỏ tới <span class="mono">cx/gpt-5.5</span> rồi <span class="mono">nim/…</span>, để bot cũ gọi "gpt-4o" vẫn chạy.</div>`;
+});
+function comboForm(c) {
+  const isNew = !c;
+  c = c || { name: "", strategy: "priority", targets: [], enabled: true, note: "" };
+  modal(`<h2>${isNew ? "Tạo combo" : "Sửa combo"}</h2>
+    <label class="f"><span>Tên (client gọi bằng tên này, vd: gpt-4o, smart, fast)</span><input type="text" id="cbName" value="${esc(c.name)}"></label>
+    <label class="f"><span>Chiến lược</span><select id="cbStrat">${Object.entries(STRAT).map(([k, v]) => `<option value="${k}" ${k === c.strategy ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <label class="f"><span>Model đích, mỗi dòng 1 (dạng alias/model hoặc tên combo khác)</span><textarea id="cbTargets" style="min-height:120px">${esc(c.targets.join("\n"))}</textarea></label>
+    <div class="row" style="margin:-4px 0 10px"><input type="text" id="cbPick" list="modelOptions" placeholder="Chọn model để thêm…" style="flex:1"><button class="btn sm" id="cbAdd">Thêm</button></div>
+    <label class="f"><span>Ghi chú</span><input type="text" id="cbNote" value="${esc(c.note)}"></label>
+    <label class="switch f"><input type="checkbox" id="cbEn" ${c.enabled ? "checked" : ""}> Bật</label>
+    <div class="row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="cbSave">Lưu</button></div>`, m => {
+    m.querySelector("#cbAdd").onclick = () => { const v = $("#cbPick").value.trim(); if (!v) return;
+      const ta = $("#cbTargets"); ta.value = (ta.value.trim() ? ta.value.trim() + "\n" : "") + v; $("#cbPick").value = ""; };
+    m.querySelector("#cbSave").onclick = run(async () => {
+      await api("/admin/api/combos", { body: { old_name: isNew ? null : c.name, name: $("#cbName").value, strategy: $("#cbStrat").value,
+        targets: $("#cbTargets").value, note: $("#cbNote").value, enabled: $("#cbEn").checked } });
+      closeModal(); toast("Đã lưu combo"); loadCombos();
+    });
+  });
+}
+$("#addCombo").onclick = () => comboForm(null);
+window.editCombo = i => comboForm(combos[i]);
+window.delCombo = run(async i => { const name = combos[i].name; if (!confirm(`Xóa combo ${name}?`)) return;
+  await api(`/admin/api/combos/${encodeURIComponent(name)}`, { method: "DELETE" }); loadCombos(); });
+
+// ---------------------------------------------------------------- keys
+let keys = [];
+const loadKeys = run(async () => {
+  keys = (await api("/admin/api/keys")).data;
+  $("#keyTable").innerHTML = `<tr><th>Tên</th><th>Key</th><th>Model được dùng</th><th>Giới hạn</th><th>Dùng lần cuối</th><th></th></tr>` +
+    (keys.map(k => `<tr><td><b>${esc(k.name)}</b>${k.enabled ? "" : ` <span class="badge">tắt</span>`}</td><td class="mono">${esc(k.prefix)}…</td>
+      <td class="mono">${k.allowed_models ? esc(k.allowed_models.join(", ")) : "tất cả"}</td><td>${k.rpm ? k.rpm + "/phút" : "không"}</td>
+      <td>${ago(k.last_used_at)}</td><td class="row"><button class="btn sm" onclick="editKey('${k.id}')">Sửa</button>
+      <button class="btn sm danger" onclick="delKey('${k.id}')">Xóa</button></td></tr>`).join("")
+      || `<tr><td colspan="6" class="muted">Chưa có key nào</td></tr>`);
+});
+function keyForm(k) {
+  const isNew = !k;
+  k = k || { name: "", allowed_models: null, rpm: 0, enabled: true };
+  modal(`<h2>${isNew ? "Tạo API key" : "Sửa key"}</h2>
+    <label class="f"><span>Tên (vd: bot-telegram, claude-code)</span><input type="text" id="kName" value="${esc(k.name)}"></label>
+    <label class="f"><span>Chỉ cho phép các model (cách nhau dấu phẩy, hỗ trợ * ở cuối; để trống = tất cả)</span><input type="text" id="kModels" value="${esc((k.allowed_models || []).join(", "))}" placeholder="vd: gpt-4o, cx/*"></label>
+    <label class="f"><span>Giới hạn request/phút (0 = không giới hạn)</span><input type="number" id="kRpm" value="${k.rpm}" min="0"></label>
+    ${isNew ? "" : `<label class="switch f"><input type="checkbox" id="kEn" ${k.enabled ? "checked" : ""}> Bật</label>`}
+    <div class="row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="kSave">${isNew ? "Tạo" : "Lưu"}</button></div>`, m => {
+    m.querySelector("#kSave").onclick = run(async () => {
+      const body = { name: $("#kName").value, allowed_models: $("#kModels").value, rpm: +$("#kRpm").value };
+      if (isNew) {
+        const r = await api("/admin/api/keys", { body });
+        modal(`<h2>Key đã tạo</h2><p>Copy và lưu lại ngay, key sẽ <b>không hiện lại</b>.</p><div class="code" id="newKey">${esc(r.key)}</div>
+          <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" onclick="navigator.clipboard.writeText($('#newKey').textContent);toast('Đã copy')">Copy</button>
+          <button class="btn primary" onclick="closeModal()">Xong</button></div>`);
+      } else {
+        body.enabled = $("#kEn").checked;
+        await api(`/admin/api/keys/${k.id}`, { method: "PATCH", body }); closeModal();
+      }
+      loadKeys();
+    });
+  });
+}
+$("#addKey").onclick = () => keyForm(null);
+window.editKey = id => keyForm(keys.find(k => k.id === id));
+window.delKey = run(async id => { if (!confirm("Xóa key này? Client đang dùng sẽ bị từ chối.")) return;
+  await api(`/admin/api/keys/${id}`, { method: "DELETE" }); loadKeys(); });
+
+// ---------------------------------------------------------------- playground
+$("#pgSend").onclick = run(async () => {
+  const b = $("#pgSend"); b.disabled = true; b.textContent = "Đang gửi…";
+  const out = $("#pgOut"); out.classList.remove("hide"); out.innerHTML = `<span class="muted">Đang chờ phản hồi…</span>`;
+  try {
+    const r = await api("/admin/api/playground", { body: { model: $("#pgModel").value, system: $("#pgSystem").value, message: $("#pgMsg").value } });
+    const tries = (r.attempts || []).map(a => `<li class="mono">${esc(a.target)}${a.account ? " (" + esc(a.account) + ")" : ""}: <span class="bad">${esc(a.error)}</span></li>`).join("");
+    out.innerHTML = r.ok
+      ? `<div class="row" style="margin-bottom:8px"><span class="badge mono">${esc(r.target)}</span><span class="badge">${esc(r.account)}</span>
+          <span class="badge">TTFB ${r.ttfb_ms} ms</span><span class="badge">tổng ${r.total_ms} ms</span>
+          ${r.usage ? `<span class="badge">${r.usage.prompt_tokens} → ${r.usage.completion_tokens} token</span>` : ""}</div>
+         ${r.reasoning ? `<details><summary class="muted">Suy luận</summary><div class="code">${esc(r.reasoning)}</div></details>` : ""}
+         <div style="white-space:pre-wrap">${esc(r.reply)}</div>${tries ? `<div class="muted" style="margin-top:10px">Đã thử trước đó:</div><ul>${tries}</ul>` : ""}`
+      : `<div class="bad">Lỗi ${r.status || ""}: ${esc(r.error)}</div>${tries ? `<ul>${tries}</ul>` : ""}`;
+  } finally { b.disabled = false; b.textContent = "Gửi"; }
+});
+
+// ---------------------------------------------------------------- settings
+const loadSettings = run(async () => {
+  const s = (await api("/admin/api/settings")).data;
+  $("#sDefault").value = s.default_model || ""; $("#sFallback").checked = !!s.unknown_model_fallback; $("#sRtk").checked = !!s.rtk_enabled;
+  $("#sThr").value = s.breaker_threshold; $("#sCool").value = s.breaker_cooldown; $("#sDays").value = s.usage_retention_days; $("#sRows").value = s.usage_max_rows;
+  refreshModelOptions();
+  const base = location.origin;
+  $("#howto").innerHTML = `
+    <p><b>OpenAI SDK / bot Telegram, Discord…</b></p><div class="code">base_url = ${esc(base)}/v1
+api_key  = sk-uni-…  (tạo ở tab API Keys)
+model    = tên combo hoặc alias/model (vd: cx/gpt-5.5)</div>
+    <p><b>Claude Code</b> (gọi API Anthropic /v1/messages)</p><div class="code">export ANTHROPIC_BASE_URL=${esc(base)}
+export ANTHROPIC_AUTH_TOKEN=sk-uni-…
+export ANTHROPIC_MODEL=&lt;tên combo&gt;
+export ANTHROPIC_DEFAULT_HAIKU_MODEL=&lt;combo nhanh&gt;</div>
+    <p><b>Codex CLI</b> (~/.codex/config.toml, dùng /v1/responses)</p><div class="code">model = "cx/gpt-5.5"
+model_provider = "unirouter"
+[model_providers.unirouter]
+name = "UniRouter"
+base_url = "${esc(base)}/v1"
+env_key = "UNIROUTER_API_KEY"
+wire_api = "responses"</div>
+    <p><b>Kiểm tra nhanh</b></p><div class="code">curl ${esc(base)}/v1/chat/completions -H "Authorization: Bearer sk-uni-…" \\
+  -H "Content-Type: application/json" -d '{"model":"cx/gpt-5.5","messages":[{"role":"user","content":"Xin chào"}]}'</div>`;
+});
+$("#saveSettings").onclick = run(async () => {
+  await api("/admin/api/settings", { body: { default_model: $("#sDefault").value, unknown_model_fallback: $("#sFallback").checked,
+    rtk_enabled: $("#sRtk").checked, breaker_threshold: +$("#sThr").value, breaker_cooldown: +$("#sCool").value,
+    usage_retention_days: +$("#sDays").value, usage_max_rows: +$("#sRows").value } });
+  toast("Đã lưu cài đặt");
+});
+
+// ---------------------------------------------------------------- start
+async function start() {
+  const me = await (await fetch("/admin/api/me")).json();
+  if (!me.authenticated) { showLogin(me.enabled === false ? "Trang quản trị đang tắt: hãy đặt biến môi trường ADMIN_PASSWORD rồi khởi động lại." : ""); return; }
+  $("#login").classList.add("hide"); $("#app").classList.remove("hide");
+  let tab = "overview"; try { tab = localStorage.getItem("uni-tab") || tab; } catch (e) {}
+  openTab(tab);
+}
+setInterval(() => { if (current === "overview" && !document.hidden && !$("#app").classList.contains("hide")) loadOverview(); }, 30000);
+start();
+</script>
+</body>
+</html>
