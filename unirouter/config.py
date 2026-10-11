@@ -7,7 +7,39 @@ import os
 import secrets
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
+
+
+def load_dotenv(*paths: Path) -> list[str]:
+    """Đọc file .env (Botkeep ghi biến môi trường vào .env thay vì truyền vào process).
+
+    Không ghi đè biến đã có sẵn trong môi trường. Hỗ trợ KEY=VALUE, `export KEY=...`,
+    giá trị trong nháy đơn/kép, và bỏ qua dòng trống/chú thích.
+    """
+    loaded: list[str] = []
+    for path in paths:
+        try:
+            text = path.read_text(encoding="utf-8-sig")
+        except OSError:
+            continue
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            if line.startswith("export "):
+                line = line[7:].lstrip()
+            key, value = line.split("=", 1)
+            key, value = key.strip(), value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+                value = value[1:-1]
+            if key and key not in os.environ:
+                os.environ[key] = value
+                loaded.append(key)
+    return loaded
+
+
+_ROOT = Path(__file__).resolve().parent.parent
+DOTENV_LOADED = load_dotenv(Path.cwd() / ".env", _ROOT / ".env")
 
 
 def _env(name: str, default: str = "") -> str:
