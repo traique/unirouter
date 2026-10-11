@@ -427,3 +427,17 @@ def test_codex_client_disconnect_aborts_upstream(env):
         assert env["mock"].calls.get("gpt-slow-finished", 0) == 0  # upstream đã bị hủy, không chạy tới cuối
     finally:
         api.EARLY_WAIT = old
+
+
+def test_load_dotenv(tmp_path, monkeypatch):
+    from unirouter.config import load_dotenv
+    p = tmp_path / ".env"
+    p.write_text('# c\nUNI_A=1\nexport UNI_B="x y"\nUNI_C=\'q+/=\'\nUNI_D=keep\n\nbad line\n')
+    monkeypatch.setenv("UNI_D", "env-wins")
+    for k in ("UNI_A", "UNI_B", "UNI_C"):
+        monkeypatch.delenv(k, raising=False)
+    load_dotenv(p, tmp_path / "missing.env")
+    import os
+    assert (os.environ["UNI_A"], os.environ["UNI_B"], os.environ["UNI_C"], os.environ["UNI_D"]) == ("1", "x y", "q+/=", "env-wins")
+    for k in ("UNI_A", "UNI_B", "UNI_C"):
+        monkeypatch.delenv(k, raising=False)
