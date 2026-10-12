@@ -119,8 +119,13 @@ def test_unknown_model_uses_default(env):
     r = oa(env).chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": "hi"}])
     assert r.choices[0].message.content == "Hello from ok"
     st.store.set_settings({"default_model": ""})
+    # không đặt model mặc định -> dùng "auto" (mọi provider có tài khoản)
+    r = oa(env).chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": "hi"}])
+    assert r.choices[0].message.content
+    st.store.set_settings({"unknown_model_fallback": False})
     with pytest.raises(openai.NotFoundError):
         oa(env).chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": "hi"}])
+    st.store.set_settings({"unknown_model_fallback": True})
 
 
 def test_midstream_failure_reported_in_band(env):
@@ -205,6 +210,10 @@ def test_responses_to_openai_provider(env):
 # ------------------------------------------------------------------ Codex (ChatGPT)
 def test_codex_chat_with_refresh(env):
     mock = env["mock"]
+    st = env["st"]
+    cid = next(c["id"] for c in st.store.connections.values() if c["label"] == "chatgpt-1")
+    sec = st.store.connection_secret(cid)
+    st.store.update_connection_secret(cid, {**sec, "expires_at": int(time.time() * 1000) + 60_000})  # sắp hết hạn
     before = mock.calls.get("refresh", 0)
     r = oa(env).chat.completions.create(model="cx/gpt-ok", messages=[{"role": "system", "content": "sys"},
                                                                       {"role": "user", "content": "chào"}])
@@ -451,7 +460,7 @@ def test_admin_quick_provider(env):
             "name": "Mạng Đẹp API", "base_url": env["up"] + "/oai/v1/chat/completions", "models": "", "api_key": "good"})
         assert r.status_code == 200, r.text
         d = r.json()
-        assert d["alias"] == "mang-dep-api" and d["models"] == ["m1", "m2"]
+        assert d["alias"] == "mang-dep-api" and d["models"] == ["m1", "m2"] and d["test"]["ok"]
         p = env["st"].store.providers["mang-dep-api"]
         assert p["base_url"] == env["up"] + "/oai/v1"
         r2 = c.post("/admin/api/providers/quick", headers=h, json={
@@ -477,3 +486,39 @@ def test_openrouter_auto_headers():
     h = headers_for({"base_url": "https://openrouter.ai/api/v1", "headers": {}}, {"api_key": "k"})
     assert h["X-Title"] == "UniRouter" and h["Authorization"] == "Bearer k"
     assert "X-Title" not in headers_for({"base_url": "https://api.groq.com/openai/v1"}, {"api_key": "k"})
+
+
+def test_auto_model(env):
+    st = env["st"]
+    for c in st.store.connections.values():
+        st.health.reset(c["id"])
+    targets, _ = st.router.resolve("auto")
+    labels = [t.label for t in targets]
+    assert labels[0] == "cx/gpt-ok" and "mk2/ok" in labels
+    assert "auto" in [m.id for m in oa(env).models.list()]
+    r = oa(env).chat.completions.create(model="auto", messages=[{"role": "user", "content": "hi"}])
+    assert r.choices[0].message.content == "Xin chào"
+    # Claude Code gửi tên model Claude -> tự chạy qua auto
+    c = anthropic.Anthropic(base_url=env["base"], api_key="master-test", max_retries=0)
+    assert c.messages.create(model="claude-unknown-model", max_tokens=50,
+                             messages=[{"role": "user", "content": "hi"}]).content[0].text == "Xin chào"
+
+
+def test_add_key_autofetch_models_free_first(env):
+    st = env["st"]
+    st.store.upsert_provider({"id": "freecat", "alias": "fc", "name": "Free Cat", "type": "openai",
+                              "base_url": env["up"] + "/oai/v1", "models": [],
+                              "options": {"models_url": env["up"] + "/catalog/models"}})
+    with httpx.Client(base_url=env["base"]) as c:
+        c.post("/admin/api/login", json={"username": "admin", "password": "pw"})
+        r = c.post("/admin/api/providers/freecat/connections", headers={"X-Requested-With": "unirouter"},
+                   json={"api_key": "good"}).json()
+    assert r["models"] == 3
+    assert st.store.providers["freecat"]["models"] == ["alpha-free", "ok", "zeta-paid"]
+    assert r["test"] is not None  # đã gọi thử model đầu tiên
+    provs = None
+    with httpx.Client(base_url=env["base"]) as c:
+        c.post("/admin/api/login", json={"username": "admin", "password": "pw"})
+        provs = {p["id"]: p for p in c.get("/admin/api/providers").json()["data"]}
+    assert provs["github"]["free"] and provs["github"]["signup_url"].startswith("https://github.com")
+    assert provs["opencode-zen"]["base_url"] == "https://opencode.ai/zen/v1"

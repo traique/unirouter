@@ -89,6 +89,11 @@ async def oai_models():
     return {"data": [{"id": "m1"}, {"id": "m2"}]}
 
 
+@app.get("/catalog/models")
+async def catalog_models():
+    return [{"id": "zeta-paid"}, {"id": "ok"}, {"id": "alpha-free"}]
+
+
 def ev(d: dict) -> str:
     return f"event: {d['type']}\ndata: {json.dumps(d)}\n\n"
 
