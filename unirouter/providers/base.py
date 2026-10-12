@@ -88,7 +88,43 @@ class Provider:
     type = "base"
 
     async def open(self, target: Target, connection: dict[str, Any], ctx: CallContext) -> AsyncIterator[Event]:
-        raise NotImplementedError
+        raise ProviderError(400, f"{target.provider['name']} không hỗ trợ chat", "target")
 
     async def list_models(self, provider: dict[str, Any], connection: dict[str, Any]) -> list[str]:
         return list(provider.get("models") or [])
+
+    async def embeddings(self, target: Target, connection: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+        raise ProviderError(400, f"{target.provider['name']} không hỗ trợ embeddings", "target")
+
+    async def images(self, target: Target, connection: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+        raise ProviderError(400, f"{target.provider['name']} không hỗ trợ tạo ảnh", "target")
+
+    async def transcriptions(self, target: Target, connection: dict[str, Any], body: dict[str, Any]) -> Any:
+        raise ProviderError(400, f"{target.provider['name']} không hỗ trợ chuyển giọng nói thành chữ", "target")
+
+    async def speech(self, target: Target, connection: dict[str, Any], body: dict[str, Any]) -> tuple[bytes, str]:
+        raise ProviderError(400, f"{target.provider['name']} không hỗ trợ chuyển chữ thành giọng nói", "target")
+
+
+# --------------------------------------------------------------- loại model
+KINDS = ("chat", "embeddings", "images", "transcriptions", "speech")
+_STT_HINTS = ("whisper", "transcribe", "voxtral", "speech-to-text", "-stt", "stt-")
+_TTS_HINTS = ("-tts", "tts-", "text-to-speech", "orpheus", "playai", "kokoro")
+_EMBED_HINTS = ("embed", "bge-", "/bge", "e5-", "-e5", "gte-", "nomic-embed", "rerank")
+_IMAGE_HINTS = ("image", "imagen", "flux", "dall-e", "dalle", "stable-diffusion", "sdxl", "sd3", "kandinsky",
+                "playground-v", "recraft", "ideogram", "seedream", "hidream")
+
+
+def model_kind(model: str) -> str:
+    """Đoán loại model theo tên: transcriptions / speech / embeddings / images / chat."""
+    m = model.lower()
+    if any(h in m for h in _STT_HINTS):
+        return "transcriptions"
+    if any(h in m for h in _TTS_HINTS) or m.endswith(("neural", "neuralhd")):
+        return "speech"
+    if any(h in m for h in _EMBED_HINTS):
+        return "embeddings"
+    # "gemini-2.5-flash-image" vẫn là model chat có xuất ảnh -> vẫn coi là ảnh
+    if any(h in m for h in _IMAGE_HINTS):
+        return "images"
+    return "chat"

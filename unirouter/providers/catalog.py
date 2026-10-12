@@ -1,6 +1,6 @@
 """Danh sách provider dựng sẵn. Admin có thể sửa model, base URL hoặc thêm provider mới.
 
-Danh sách model chỉ là gợi ý ban đầu (tổng hợp từ 9router/apirouter, 10/2026).
+Danh sách model chỉ là gợi ý ban đầu (10/2026).
 Dùng nút "Lấy danh sách model" trong /admin để cập nhật từ chính provider.
 """
 from __future__ import annotations
@@ -24,12 +24,14 @@ PRESETS: list[dict[str, Any]] = [
         "base_url": "https://integrate.api.nvidia.com/v1",
         "models": ["nvidia/nemotron-3-ultra-550b-a55b", "deepseek-ai/deepseek-v4-flash",
                     "deepseek-ai/deepseek-v4-pro", "moonshotai/kimi-k2.6", "z-ai/glm-5.2", "minimaxai/minimax-m3"],
+        "options": {"embedding_model": "nvidia/nv-embedqa-e5-v5"},
         "note": "Key miễn phí tại build.nvidia.com",
     },
     {
         "id": "groq", "signup_url": "https://console.groq.com/keys", "free": True, "alias": "groq", "name": "Groq", "type": "openai",
         "base_url": "https://api.groq.com/openai/v1",
         "models": ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile", "qwen/qwen3-32b"],
+        "options": {"stt_model": "whisper-large-v3-turbo"},
         "note": "Key miễn phí tại console.groq.com",
     },
     {
@@ -53,14 +55,14 @@ PRESETS: list[dict[str, Any]] = [
         "id": "gemini", "signup_url": "https://aistudio.google.com/apikey", "free": True, "alias": "gm", "name": "Google Gemini", "type": "openai",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
         "models": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
-        "options": {"stream_usage": False},
+        "options": {"stream_usage": False, "embedding_model": "gemini-embedding-001"},
         "note": "Key tại aistudio.google.com (endpoint tương thích OpenAI)",
     },
     {
         "id": "mistral", "signup_url": "https://console.mistral.ai/api-keys", "free": True, "alias": "ms", "name": "Mistral", "type": "openai",
         "base_url": "https://api.mistral.ai/v1",
         "models": ["mistral-large-latest", "mistral-medium-latest", "codestral-latest"],
-        "options": {"stream_usage": False},
+        "options": {"stream_usage": False, "embedding_model": "mistral-embed", "stt_model": "voxtral-mini-latest"},
     },
     {
         "id": "deepseek", "signup_url": "https://platform.deepseek.com/api_keys", "alias": "ds", "name": "DeepSeek", "type": "openai",
@@ -77,8 +79,25 @@ PRESETS: list[dict[str, Any]] = [
     {
         "id": "github", "alias": "gh", "name": "GitHub Models", "type": "openai",
         "base_url": "https://models.github.ai/inference", "models": [],
-        "options": {"models_url": "https://models.github.ai/catalog/models"},
+        "options": {"models_url": "https://models.github.ai/catalog/models",
+                    "embedding_model": "openai/text-embedding-3-small"},
         "signup_url": "https://github.com/settings/personal-access-tokens/new", "free": True,
         "note": "Miễn phí với tài khoản GitHub (có giới hạn theo ngày). Tạo token có quyền \"Models: read\" rồi dán vào.",
+    },
+    {
+        "id": "azure-speech", "alias": "az", "name": "Microsoft Azure Speech", "type": "azure",
+        "base_url": "https://southeastasia.tts.speech.microsoft.com",
+        "models": ["vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"],
+        "options": {"region": "southeastasia"},
+        "signup_url": "https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices", "free": True,
+        "note": "Giọng đọc Neural của Microsoft, có tiếng Việt (HoaiMy giọng nữ, NamMinh giọng nam). Tạo tài nguyên "
+                "Speech gói F0 miễn phí (khoảng 500.000 ký tự/tháng), dán Key 1 và chọn đúng Region.",
+    },
+    {
+        "id": "edge-tts", "alias": "edge", "name": "Microsoft Edge TTS", "type": "edge",
+        "base_url": "https://speech.platform.bing.com", "models": ["vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"],
+        "free": True,
+        "note": "Giọng đọc của tính năng Đọc to trên Edge, không cần key (thư viện edge-tts). Không phải API chính "
+                "thức: Microsoft có thể chặn bất cứ lúc nào, nên bật kèm Azure Speech để dự phòng.",
     },
 ]

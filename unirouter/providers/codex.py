@@ -1,8 +1,8 @@
 """Provider ChatGPT qua Codex backend (chatgpt.com/backend-api/codex/responses).
 
-Gộp kinh nghiệm từ 9router (header Codex CLI, allowlist field, chế độ "responses lite",
-reasoning effort, usage_limit_reached -> khóa tài khoản đến lúc reset) và chatgpt-gateway
-(curl_cffi giả lập trình duyệt, tự retry 1 lần khi server_is_overloaded trước khi có output).
+- Header giống Codex CLI, chỉ giữ các field backend chấp nhận, chế độ "responses lite"
+- Reasoning effort qua hậu tố model (-low, -high...), usage_limit_reached -> khóa tài khoản đến lúc reset
+- curl_cffi giả lập trình duyệt, tự retry 1 lần khi server quá tải trước khi có output
 """
 from __future__ import annotations
 
@@ -285,7 +285,7 @@ class CodexProvider(Provider):
             raw = False
         await inline_remote_images(payload)
 
-        # Retry 1 lần khi server quá tải trước khi có output (giống 9router/chatgpt-gateway)
+        # Retry 1 lần khi server quá tải trước khi có output
         for attempt in range(2):
             resp = await self._post(provider, connection, payload, lite)
             it = self._iter_events(resp.aiter_lines())
@@ -426,6 +426,59 @@ class CodexProvider(Provider):
                 await codex_auth.abort_response(resp)
             except Exception:
                 pass
+
+    async def images(self, target: Target, connection: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+        """Tạo ảnh bằng tool image_generation của Responses (dùng hạn mức ChatGPT). Thử nghiệm."""
+        provider = target.provider
+        opts = provider.get("options") or {}
+        lite = set(opts.get("lite_models") or [])
+        chat_model = opts.get("image_chat_model") or next(
+            (m for m in [opts.get("auto_model"), *provider.get("models", [])] if m and m not in lite), None)
+        if not chat_model:
+            raise ProviderError(400, "Chưa có model chat để gọi công cụ tạo ảnh", "target")
+        tool: dict[str, Any] = {"type": "image_generation", "output_format": "png"}
+        size = str(body.get("size") or "auto")
+        if size in ("1024x1024", "1024x1536", "1536x1024", "auto"):
+            tool["size"] = size
+        if body.get("quality") in ("low", "medium", "high", "auto"):
+            tool["quality"] = body["quality"]
+        if body.get("background") in ("transparent", "opaque", "auto"):
+            tool["background"] = body["background"]
+        prompt = str(body.get("prompt") or "")
+        n = max(1, min(int(body.get("n") or 1), 4))
+        images: list[dict[str, Any]] = []
+        usage = {"input": 0, "output": 0}
+
+        async def one() -> None:
+            payload = {"model": chat_model, "instructions": "Generate exactly the image the user describes. "
+                                                            "Do not ask questions.",
+                       "input": [{"type": "message", "role": "user",
+                                  "content": [{"type": "input_text", "text": prompt}]}],
+                       "tools": [tool], "tool_choice": {"type": "image_generation"}}
+            payload, lite_mode = finalize_payload(provider, payload, "low")
+            if lite_mode:
+                raise ProviderError(400, "Model lite không hỗ trợ tạo ảnh", "target")
+            ctx = CallContext({}, True, "images", payload)
+            it = await self.open(Target(provider, chat_model, target.label), connection, ctx)
+            found = None
+            async for ev in it:
+                if ev.get("type") == "usage":
+                    usage["input"] += ev.get("input", 0)
+                    usage["output"] += ev.get("output", 0)
+                    continue
+                raw = ev.get("event") or {}
+                item = raw.get("item") or {}
+                if raw.get("type") == "response.output_item.done" and item.get("type") == "image_generation_call":
+                    if item.get("result"):
+                        found = {"b64_json": item["result"], "revised_prompt": item.get("revised_prompt") or prompt}
+            if not found:
+                raise ProviderError(502, "ChatGPT không trả về ảnh (tài khoản có thể chưa được dùng công cụ tạo ảnh)")
+            images.append(found)
+
+        for _ in range(n):
+            await one()
+        return {"created": int(time.time()), "data": images,
+                "usage": {"input_tokens": usage["input"], "output_tokens": usage["output"]}}
 
     async def list_models(self, provider: dict[str, Any], connection: dict[str, Any]) -> list[str]:
         access, account_id = await codex_auth.ensure_access_token(self.store, connection)

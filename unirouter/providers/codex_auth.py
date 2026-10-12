@@ -1,7 +1,7 @@
 """Đăng nhập ChatGPT (Codex OAuth): device code, nhập auth.json, làm mới token.
 
-Luồng giống Codex CLI chính thức (client_id app_EMoamEEZ73f0CkXaXp7hrann), tham khảo
-chatgpt-gateway (device login) và 9router (thời điểm refresh, xử lý token xoay vòng).
+Luồng giống Codex CLI chính thức (client_id app_EMoamEEZ73f0CkXaXp7hrann): đăng nhập bằng mã
+thiết bị, làm mới token trước khi hết hạn và xử lý refresh token xoay vòng.
 """
 from __future__ import annotations
 
