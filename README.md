@@ -62,6 +62,10 @@ python main.py                    # mở http://localhost:20128/admin
 4. **API Keys:** tạo key cho từng bot (có thể giới hạn model, ví dụ `gpt-4o, cx/*`, và giới hạn request/phút).
 5. **Cài đặt:** đặt *model mặc định* để mọi tên model lạ đều chạy qua combo đó.
 
+## Dùng ngay với model `auto`
+
+Không cần tạo combo: thêm provider (Tên, Base URL, Model, API key) rồi gọi model **`auto`**. Router tự thử lần lượt mọi provider đã có tài khoản (ChatGPT trước, rồi các provider khác), lỗi hoặc hết hạn mức thì tự chuyển. Client gửi tên model lạ (vd Claude Code gửi `claude-…`, bot cũ gửi `gpt-4o`) cũng tự chạy qua `auto`, trừ khi bạn đặt model mặc định khác trong Cài đặt. Đổi model mà `auto` dùng cho từng provider ở Providers → Sửa → Nâng cao.
+
 ## Gọi API
 
 Tên model có dạng `alias/model` (`cx/gpt-5.5`, `nim/…`, `groq/…`, `or/…`), tên combo, hoặc tên model trần nếu chỉ một provider có model đó. Hậu tố `-low`, `-medium`, `-high` hoặc `-xhigh` đặt mức suy luận cho ChatGPT, ví dụ `cx/gpt-5.5-high`.
