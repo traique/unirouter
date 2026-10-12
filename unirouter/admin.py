@@ -206,6 +206,61 @@ async def save_provider(request: Request):
     return {"ok": True, "id": p["id"]}
 
 
+def _slug(name: str) -> str:
+    import re
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", name.replace("đ", "d").replace("Đ", "D"))
+    text = text.encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", text).strip("-")[:24] or "api"
+
+
+@router.post("/admin/api/providers/quick")
+async def quick_provider(request: Request):
+    """Thêm nhanh provider tương thích OpenAI: chỉ cần tên, base URL, model, API key."""
+    require_admin(request)
+    st = S(request)
+    data = await request.json()
+    name = str(data.get("name") or "").strip()
+    base_url = str(data.get("base_url") or "").strip().rstrip("/")
+    for suffix in ("/chat/completions", "/completions", "/models"):
+        if base_url.endswith(suffix):
+            base_url = base_url[: -len(suffix)]
+    api_key = str(data.get("api_key") or "").strip()
+    raw_models = data.get("models") or ""
+    if isinstance(raw_models, str):
+        raw_models = raw_models.replace(",", "\n").split("\n")
+    models = [str(m).strip() for m in raw_models if str(m).strip()]
+    if not name:
+        raise HTTPException(400, "Nhập tên provider")
+    if not base_url.startswith(("http://", "https://")) or len(base_url) < 12:
+        raise HTTPException(400, "Base URL phải bắt đầu bằng http:// hoặc https://")
+
+    base = _slug(name)
+    pid, n = base, 2
+    while pid in st.store.providers or pid in st.store.alias_map:
+        pid, n = f"{base}-{n}", n + 1
+    try:
+        st.store.upsert_provider({"id": pid, "alias": pid, "name": name, "type": "openai", "base_url": base_url,
+                                  "models": models})
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    conn = st.store.add_connection(pid, name, {"api_key": api_key})
+
+    error = None
+    if not models:  # tự lấy danh sách model từ provider
+        try:
+            models = await st.providers["openai"].list_models(st.store.providers[pid],
+                                                               {**conn, "_secret": {"api_key": api_key}})
+            if models:
+                st.store.upsert_provider({"id": pid, "models": models})
+        except ProviderError as e:
+            error = e.message
+        except Exception as e:  # noqa: BLE001
+            error = str(e)
+    return {"ok": True, "id": pid, "alias": pid, "models": models, "error": error}
+
+
 @router.delete("/admin/api/providers/{pid}")
 async def delete_provider(pid: str, request: Request):
     require_admin(request)

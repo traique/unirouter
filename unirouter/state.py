@@ -15,10 +15,18 @@ class AppState:
         self.store = Store(str(db_path or config.DB_PATH))
         self.health = Health(threshold=int(self.store.setting("breaker_threshold")),
                              cooldown=float(self.store.setting("breaker_cooldown")))
-        self.providers = {"openai": OpenAICompatProvider(), "codex": CodexProvider(self.store)}
+        self.providers = {"openai": OpenAICompatProvider(self._learn_option), "codex": CodexProvider(self.store)}
         self.router = Router(self.store, self.providers, self.health)
         self.usage = UsageLog(self.store)
         self.limiter = RateLimiter()
+
+    def _learn_option(self, provider_id: str, key: str, value) -> None:
+        p = self.store.providers.get(provider_id)
+        if p is not None:
+            try:
+                self.store.upsert_provider({"id": provider_id, "options": {**(p.get("options") or {}), key: value}})
+            except Exception:
+                pass
 
     def apply_settings(self) -> None:
         self.health.threshold = int(self.store.setting("breaker_threshold"))
