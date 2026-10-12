@@ -11,7 +11,7 @@ CODEX_LITE_MODELS = ["gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"]
 
 PRESETS: list[dict[str, Any]] = [
     {
-        "id": "codex", "alias": "cx", "name": "ChatGPT (Codex OAuth)", "type": "codex",
+        "id": "codex", "signup_url": "https://chatgpt.com", "alias": "cx", "name": "ChatGPT (Codex OAuth)", "type": "codex",
         "base_url": "https://chatgpt.com/backend-api/codex/responses",
         "models": ["gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
                     "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"],
@@ -20,51 +20,65 @@ PRESETS: list[dict[str, Any]] = [
                 "không phải API chính thức: có thể hỏng khi OpenAI đổi backend và có rủi ro khóa tài khoản.",
     },
     {
-        "id": "nvidia", "alias": "nim", "name": "NVIDIA NIM", "type": "openai",
+        "id": "nvidia", "signup_url": "https://build.nvidia.com/settings/api-keys", "free": True, "alias": "nim", "name": "NVIDIA NIM", "type": "openai",
         "base_url": "https://integrate.api.nvidia.com/v1",
         "models": ["nvidia/nemotron-3-ultra-550b-a55b", "deepseek-ai/deepseek-v4-flash",
                     "deepseek-ai/deepseek-v4-pro", "moonshotai/kimi-k2.6", "z-ai/glm-5.2", "minimaxai/minimax-m3"],
         "note": "Key miễn phí tại build.nvidia.com",
     },
     {
-        "id": "groq", "alias": "groq", "name": "Groq", "type": "openai",
+        "id": "groq", "signup_url": "https://console.groq.com/keys", "free": True, "alias": "groq", "name": "Groq", "type": "openai",
         "base_url": "https://api.groq.com/openai/v1",
         "models": ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile", "qwen/qwen3-32b"],
         "note": "Key miễn phí tại console.groq.com",
     },
     {
-        "id": "openrouter", "alias": "or", "name": "OpenRouter", "type": "openai",
+        "id": "openrouter", "signup_url": "https://openrouter.ai/settings/keys", "free": True, "alias": "or", "name": "OpenRouter", "type": "openai",
         "base_url": "https://openrouter.ai/api/v1",
         "models": ["nvidia/nemotron-3-super-120b-a12b:free", "google/gemma-4-26b-a4b-it:free"],
         "headers": {"HTTP-Referer": "https://github.com/unirouter", "X-Title": "UniRouter"},
         "note": "Các model có hậu tố :free không tốn phí",
     },
     {
-        "id": "tokenrouter", "alias": "tr", "name": "TokenRouter", "type": "openai",
+        "id": "tokenrouter", "signup_url": "https://tokenrouter.io", "free": True, "alias": "tr", "name": "TokenRouter", "type": "openai",
         "base_url": "https://api.tokenrouter.io/v1",
         "models": ["qwen/qwen3.8-max-free"],
     },
     {
-        "id": "cerebras", "alias": "cb", "name": "Cerebras", "type": "openai",
+        "id": "cerebras", "signup_url": "https://cloud.cerebras.ai", "free": True, "alias": "cb", "name": "Cerebras", "type": "openai",
         "base_url": "https://api.cerebras.ai/v1",
         "models": ["gpt-oss-120b", "zai-glm-4.7", "qwen-3-235b-a22b-instruct-2507"],
     },
     {
-        "id": "gemini", "alias": "gm", "name": "Google Gemini", "type": "openai",
+        "id": "gemini", "signup_url": "https://aistudio.google.com/apikey", "free": True, "alias": "gm", "name": "Google Gemini", "type": "openai",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
         "models": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
         "options": {"stream_usage": False},
         "note": "Key tại aistudio.google.com (endpoint tương thích OpenAI)",
     },
     {
-        "id": "mistral", "alias": "ms", "name": "Mistral", "type": "openai",
+        "id": "mistral", "signup_url": "https://console.mistral.ai/api-keys", "free": True, "alias": "ms", "name": "Mistral", "type": "openai",
         "base_url": "https://api.mistral.ai/v1",
         "models": ["mistral-large-latest", "mistral-medium-latest", "codestral-latest"],
         "options": {"stream_usage": False},
     },
     {
-        "id": "deepseek", "alias": "ds", "name": "DeepSeek", "type": "openai",
+        "id": "deepseek", "signup_url": "https://platform.deepseek.com/api_keys", "alias": "ds", "name": "DeepSeek", "type": "openai",
         "base_url": "https://api.deepseek.com",
         "models": ["deepseek-chat", "deepseek-reasoner"],
+    },
+    {
+        "id": "opencode-zen", "alias": "ocz", "name": "OpenCode Zen", "type": "openai",
+        "base_url": "https://opencode.ai/zen/v1", "models": [],
+        "signup_url": "https://opencode.ai/auth", "free": True,
+        "note": "API key chính chủ tại opencode.ai/auth. Có cả model miễn phí (đuôi -free) và trả phí; "
+                "dán key xong app tự lấy danh sách model, model miễn phí xếp trước.",
+    },
+    {
+        "id": "github", "alias": "gh", "name": "GitHub Models", "type": "openai",
+        "base_url": "https://models.github.ai/inference", "models": [],
+        "options": {"models_url": "https://models.github.ai/catalog/models"},
+        "signup_url": "https://github.com/settings/personal-access-tokens/new", "free": True,
+        "note": "Miễn phí với tài khoản GitHub (có giới hạn theo ngày). Tạo token có quyền \"Models: read\" rồi dán vào.",
     },
 ]

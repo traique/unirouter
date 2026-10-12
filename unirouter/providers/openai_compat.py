@@ -208,17 +208,18 @@ class OpenAICompatProvider(Provider):
             await resp.aclose()
 
     async def list_models(self, provider: dict[str, Any], connection: dict[str, Any]) -> list[str]:
-        url = provider["base_url"].rstrip("/") + "/models"
+        url = (provider.get("options") or {}).get("models_url") or provider["base_url"].rstrip("/") + "/models"
         h = headers_for(provider, connection["_secret"])
         h["Accept"] = "application/json"
         resp = await http.client().get(url, headers=h, timeout=30)
         if resp.status_code >= 400:
             raise classify_http(resp.status_code, http.error_message(resp.content, resp.status_code))
         data = resp.json()
-        items = data.get("data", data) if isinstance(data, dict) else data
+        items = (data.get("data") or data.get("models") or []) if isinstance(data, dict) else data
         ids = []
         for it in items or []:
-            mid = it.get("id") if isinstance(it, dict) else it
+            mid = (it.get("id") or it.get("name")) if isinstance(it, dict) else it
             if isinstance(mid, str):
                 ids.append(mid.removeprefix("models/"))
-        return sorted(set(ids))
+        # model miễn phí (đuôi -free / :free) xếp trước để "auto" ưu tiên dùng
+        return sorted(set(ids), key=lambda m: (not (m.endswith("-free") or m.endswith(":free")), m))
