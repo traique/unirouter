@@ -50,6 +50,8 @@ async def oai_chat(request: Request):
         return JSONResponse({"error": {"message": "temperature must be <= 2"}}, 400)
     if model == "nomodel":
         return JSONResponse({"error": {"message": "The model `nomodel` does not exist"}}, 404)
+    if model == "nostreamopt" and "stream_options" in body:
+        return JSONResponse({"error": {"message": "Unrecognized request argument supplied: stream_options"}}, 400)
     if model == "nostream":
         return {"id": "x", "object": "chat.completion", "choices": [
             {"index": 0, "message": {"role": "assistant", "content": "json-reply"}, "finish_reason": "stop"}],

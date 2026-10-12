@@ -441,3 +441,39 @@ def test_load_dotenv(tmp_path, monkeypatch):
     assert (os.environ["UNI_A"], os.environ["UNI_B"], os.environ["UNI_C"], os.environ["UNI_D"]) == ("1", "x y", "q+/=", "env-wins")
     for k in ("UNI_A", "UNI_B", "UNI_C"):
         monkeypatch.delenv(k, raising=False)
+
+
+def test_admin_quick_provider(env):
+    with httpx.Client(base_url=env["base"]) as c:
+        c.post("/admin/api/login", json={"username": "admin", "password": "pw"})
+        h = {"X-Requested-With": "unirouter"}
+        r = c.post("/admin/api/providers/quick", headers=h, json={
+            "name": "Mạng Đẹp API", "base_url": env["up"] + "/oai/v1/chat/completions", "models": "", "api_key": "good"})
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["alias"] == "mang-dep-api" and d["models"] == ["m1", "m2"]
+        p = env["st"].store.providers["mang-dep-api"]
+        assert p["base_url"] == env["up"] + "/oai/v1"
+        r2 = c.post("/admin/api/providers/quick", headers=h, json={
+            "name": "Mạng Đẹp API", "base_url": env["up"] + "/oai/v1", "models": "ok", "api_key": "good"}).json()
+        assert r2["alias"] == "mang-dep-api-2" and r2["models"] == ["ok"]
+        assert c.post("/admin/api/providers/quick", headers=h, json={"name": "x", "base_url": "abc"}).status_code == 400
+    r = oa(env).chat.completions.create(model="mang-dep-api-2/ok", messages=[{"role": "user", "content": "hi"}])
+    assert r.choices[0].message.content == "Hello from ok"
+
+
+def test_auto_drop_stream_options(env):
+    st = env["st"]
+    for c in st.store.connections.values():
+        st.health.reset(c["id"])
+    r = oa(env).chat.completions.create(model="mk/nostreamopt", messages=[{"role": "user", "content": "hi"}])
+    assert r.choices[0].message.content == "Hello from nostreamopt"
+    assert st.store.providers["mock"]["options"].get("stream_usage") is False  # đã ghi nhớ
+    st.store.upsert_provider({"id": "mock", "options": {}})
+
+
+def test_openrouter_auto_headers():
+    from unirouter.providers.openai_compat import headers_for
+    h = headers_for({"base_url": "https://openrouter.ai/api/v1", "headers": {}}, {"api_key": "k"})
+    assert h["X-Title"] == "UniRouter" and h["Authorization"] == "Bearer k"
+    assert "X-Title" not in headers_for({"base_url": "https://api.groq.com/openai/v1"}, {"api_key": "k"})

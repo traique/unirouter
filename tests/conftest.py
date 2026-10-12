@@ -50,7 +50,7 @@ def env():
     st = app.state.app
     st.store.upsert_provider({"id": "mock", "alias": "mk", "name": "Mock", "type": "openai", "base_url": up + "/oai/v1",
                               "models": ["ok", "tool", "fail500", "rate429", "badreq", "nomodel", "slow", "midfail",
-                                         "streamerr", "nostream"]})
+                                         "streamerr", "nostream", "nostreamopt"]})
     st.store.upsert_provider({"id": "mock2", "alias": "mk2", "name": "Mock 2", "type": "openai",
                               "base_url": up + "/oai/v1", "models": ["ok"]})
     st.store.add_connection("mock", "good", {"api_key": "good"})
