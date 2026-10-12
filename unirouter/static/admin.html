@@ -96,7 +96,7 @@ th{color:var(--muted);font-weight:500;font-size:12px}.tbl{overflow-x:auto}
     <!-- PROVIDERS -->
     <section id="tab-providers" class="hide">
       <div class="row between"><div><h1>Providers</h1><p class="sub">Thêm API key hoặc đăng nhập ChatGPT. Mỗi provider có thể có nhiều tài khoản để xoay vòng.</p></div>
-        <button class="btn" id="addProvider">+ Provider tùy chỉnh</button></div>
+        <button class="btn primary" id="addProvider">+ Thêm provider</button></div>
       <div id="providerList"></div>
     </section>
 
@@ -341,25 +341,26 @@ window.codexImport = pid => modal(`<h2>Nhập tài khoản ChatGPT</h2>
   }));
 
 function providerForm(p) {
-  const isNew = !p;
-  p = p || { id: "", alias: "", name: "", type: "openai", base_url: "https://", models: [], headers: {}, options: {}, note: "" };
-  modal(`<h2>${isNew ? "Thêm provider tương thích OpenAI" : "Sửa " + esc(p.name)}</h2>
-    <div class="grid"><label class="f"><span>ID</span><input type="text" id="pfId" value="${esc(p.id)}" ${isNew ? "" : "disabled"} placeholder="vd: myapi"></label>
-    <label class="f"><span>Alias (tiền tố model)</span><input type="text" id="pfAlias" value="${esc(p.alias)}" placeholder="vd: my"></label></div>
+  const isNew = false;
+  modal(`<h2>Sửa ${esc(p.name)}</h2>
     <label class="f"><span>Tên hiển thị</span><input type="text" id="pfName" value="${esc(p.name)}"></label>
     <label class="f"><span>Base URL ${p.type === "codex" ? "" : "(phần trước /chat/completions)"}</span><input type="text" id="pfUrl" value="${esc(p.base_url)}"></label>
     <label class="f"><span>Model (mỗi dòng 1 model)</span><textarea id="pfModels">${esc(p.models.join("\n"))}</textarea></label>
     ${isNew ? "" : `<button class="btn sm" id="pfFetch" style="margin:-4px 0 10px">Lấy danh sách model từ provider</button><div id="pfFetched" class="chips" style="margin-bottom:10px"></div>`}
-    <label class="f"><span>Header thêm (JSON)</span><textarea id="pfHeaders">${esc(JSON.stringify(p.headers || {}, null, 1))}</textarea></label>
-    <label class="f"><span>Tùy chọn (JSON). vd: {"account_strategy":"fill_first","stream_usage":false}</span><textarea id="pfOptions">${esc(JSON.stringify(p.options || {}, null, 1))}</textarea></label>
+    ${p.type === "openai" ? `<details style="margin-bottom:12px"><summary class="muted" style="cursor:pointer;margin-bottom:8px">Nâng cao</summary>
+    <label class="f"><span>Tiền tố model (gọi bằng tiền_tố/model)</span><input type="text" id="pfAlias" value="${esc(p.alias)}"></label>
+    <label class="f"><span>Khi có nhiều API key</span><select id="pfStrategy">
+      <option value="round_robin" ${(p.options || {}).account_strategy !== "fill_first" ? "selected" : ""}>Xoay vòng đều giữa các key</option>
+      <option value="fill_first" ${(p.options || {}).account_strategy === "fill_first" ? "selected" : ""}>Dùng hết key đầu rồi mới sang key sau</option>
+    </select></label>
+    </details>` : ""}
     <div class="row between">${!isNew && !p.builtin ? `<button class="btn danger" id="pfDel">Xóa provider</button>` : "<span></span>"}
       <div class="row"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="pfSave">Lưu</button></div></div>`, m => {
     m.querySelector("#pfSave").onclick = run(async () => {
-      let headers, options;
-      try { headers = JSON.parse($("#pfHeaders").value || "{}"); options = JSON.parse($("#pfOptions").value || "{}"); }
-      catch (e) { throw new Error("Header/Tùy chọn phải là JSON hợp lệ"); }
-      await api("/admin/api/providers", { body: { id: isNew ? $("#pfId").value : p.id, alias: $("#pfAlias").value, name: $("#pfName").value,
-        type: p.type, base_url: $("#pfUrl").value, models: $("#pfModels").value, headers, options } });
+      const body = { id: p.id, name: $("#pfName").value, base_url: $("#pfUrl").value, models: $("#pfModels").value };
+      if ($("#pfAlias")) body.alias = $("#pfAlias").value;
+      if ($("#pfStrategy")) body.options = { ...(p.options || {}), account_strategy: $("#pfStrategy").value };
+      await api("/admin/api/providers", { body });
       closeModal(); toast("Đã lưu"); loadProviders();
     });
     const f = m.querySelector("#pfFetch");
@@ -380,7 +381,29 @@ function providerForm(p) {
   });
 }
 window.editProvider = id => providerForm(providers.find(p => p.id === id));
-$("#addProvider").onclick = () => providerForm(null);
+
+function quickProviderForm() {
+  modal(`<h2>Thêm provider</h2>
+    <p class="muted" style="margin-top:-4px">Dùng cho mọi API tương thích OpenAI.</p>
+    <label class="f"><span>Tên</span><input type="text" id="qpName" placeholder="vd: My API"></label>
+    <label class="f"><span>Base URL</span><input type="text" id="qpUrl" placeholder="vd: https://api.example.com/v1"></label>
+    <label class="f"><span>Model (mỗi dòng 1 model, để trống để tự lấy danh sách)</span><textarea id="qpModels" style="min-height:60px"></textarea></label>
+    <label class="f"><span>API key</span><input type="password" id="qpKey" autocomplete="off" placeholder="sk-..."></label>
+    <div class="row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="qpSave">Thêm</button></div>`, m => {
+    const save = m.querySelector("#qpSave");
+    save.onclick = run(async () => {
+      save.disabled = true; save.textContent = "Đang thêm…";
+      try {
+        const r = await api("/admin/api/providers/quick", { body: { name: $("#qpName").value, base_url: $("#qpUrl").value,
+          models: $("#qpModels").value, api_key: $("#qpKey").value } });
+        closeModal();
+        toast(r.models.length ? `Đã thêm ${r.models.length} model, gọi bằng ${r.alias}/<model>` : `Đã thêm. Chưa có model: bấm Sửa để nhập`, !r.models.length);
+        loadProviders();
+      } finally { save.disabled = false; save.textContent = "Thêm"; }
+    });
+  });
+}
+$("#addProvider").onclick = () => quickProviderForm();
 
 async function refreshModelOptions() {
   try {
