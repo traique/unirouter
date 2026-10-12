@@ -522,3 +522,232 @@ def test_add_key_autofetch_models_free_first(env):
         provs = {p["id"]: p for p in c.get("/admin/api/providers").json()["data"]}
     assert provs["github"]["free"] and provs["github"]["signup_url"].startswith("https://github.com")
     assert provs["opencode-zen"]["base_url"] == "https://opencode.ai/zen/v1"
+
+
+# ------------------------------------------------------------------ embeddings / images
+def test_embeddings_explicit_and_usage(env):
+    r = oa(env).embeddings.create(model="mk/text-embed-small", input=["a", "b"])
+    assert len(r.data) == 2 and r.data[0].embedding == [0.1, 0.2, 0.3]
+    assert r.model == "mk/text-embed-small"
+
+
+def test_embeddings_auto_fallback_and_input_type(env):
+    st = env["st"]
+    st.store.upsert_provider({"id": "mock", "options": {**st.store.providers["mock"]["options"],
+                                                        "embedding_model": "emb-fail"}})
+    st.store.upsert_provider({"id": "mock2", "options": {**st.store.providers["mock2"]["options"],
+                                                         "embedding_model": "emb-needtype"}})
+    try:
+        r = httpx.post(env["base"] + "/v1/embeddings", headers={"Authorization": "Bearer master-test"},
+                       json={"input": "xin chào"})
+        assert r.status_code == 200, r.text
+        assert r.headers["x-unirouter-target"] == "mk2/emb-needtype"
+        assert env["mock"].last_body["emb:emb-needtype"]["input_type"] == "query"
+        # client gửi tên model OpenAI -> tự chuyển sang auto embeddings
+        r = oa(env).embeddings.create(model="text-embedding-3-small", input="hi")
+        assert r.model == "mk2/emb-needtype"
+    finally:
+        for pid in ("mock", "mock2"):
+            opts = dict(st.store.providers[pid]["options"])
+            opts.pop("embedding_model", None)
+            st.store.upsert_provider({"id": pid, "options": opts})
+        env["st"].health.conns.clear()
+
+
+def test_embeddings_none_configured(env):
+    r = httpx.post(env["base"] + "/v1/embeddings", headers={"Authorization": "Bearer master-test"},
+                   json={"model": "auto", "input": "x"})
+    assert r.status_code == 503 and "embedding" in r.json()["error"]["message"]
+
+
+def test_image_generation_url_and_file(env):
+    r = oa(env).images.generate(model="mk/img-ok", prompt="a cat")
+    url = r.data[0].url
+    assert url.startswith(env["base"] + "/v1/images/files/") and r.data[0].b64_json
+    img = httpx.get(url)
+    assert img.status_code == 200 and img.content.startswith(b"\x89PNG") and img.headers["content-type"] == "image/png"
+    r = oa(env).images.generate(model="mk/img-ok", prompt="a cat", response_format="b64_json")
+    assert r.data[0].b64_json and not r.data[0].url
+    assert httpx.get(env["base"] + "/v1/images/files/..%2Fsecret.key").status_code == 404
+
+
+def test_image_generation_retry_without_response_format_and_upstream_url(env):
+    r = oa(env).images.generate(model="mk/img-noformat", prompt="x", response_format="url")
+    assert r.data[0].url and not r.data[0].b64_json
+    r = oa(env).images.generate(model="mk/img-url", prompt="x")
+    assert r.data[0].url == "https://cdn.example.com/a.png"
+
+
+def test_image_generation_auto_uses_codex_last(env):
+    st = env["st"]
+    st.store.upsert_provider({"id": "mock", "options": {**st.store.providers["mock"]["options"], "image_model": "img-fail"}})
+    try:
+        r = httpx.post(env["base"] + "/v1/images/generations", headers={"Authorization": "Bearer master-test"},
+                       json={"prompt": "một con mèo", "size": "1024x1024"})
+        assert r.status_code == 200, r.text
+        assert r.headers["x-unirouter-target"] == "cx/gpt-image"
+        assert r.json()["data"][0]["revised_prompt"] == "a cat"
+        sent = [v for k, v in env["mock"].last_body.items() if k.startswith("codex:")]
+        assert any(b["body"].get("tools", [{}])[0].get("type") == "image_generation" for b in sent)
+    finally:
+        opts = dict(st.store.providers["mock"]["options"])
+        opts.pop("image_model", None)
+        st.store.upsert_provider({"id": "mock", "options": opts})
+        st.health.conns.clear()
+
+
+def test_chat_auto_skips_embedding_models(env):
+    from unirouter.router import Router
+    p = {"models": ["text-embedding-3-small", "gpt-x"], "options": {}, "type": "openai"}
+    assert Router.kind_model(p, "chat") == "gpt-x"
+    assert Router.kind_model(p, "embeddings") == "text-embedding-3-small"
+    assert Router.kind_model({**p, "options": {"embedding_model": ""}}, "embeddings") is None
+
+
+def test_models_list_includes_embedding_defaults(env):
+    ids = [m.id for m in oa(env).models.list().data]
+    assert "auto" in ids
+
+
+def test_admin_backup_and_key_stats(env):
+    c = httpx.Client(base_url=env["base"])
+    c.post("/admin/api/login", json={"username": "admin", "password": "pw"})
+    r = c.get("/admin/api/backup")
+    assert r.status_code == 200 and r.content.startswith(b"SQLite format 3")
+    keys = c.get("/admin/api/keys").json()["data"]
+    assert all("usage_24h" in k for k in keys)
+    r = c.post("/admin/api/playground/image", json={"model": "mk/img-ok", "prompt": "cat"},
+               headers={"X-Requested-With": "unirouter"}).json()
+    assert r["ok"] and r["images"][0]["url"]
+    r = c.post("/admin/api/playground/embed", json={"model": "mk/x-embed", "input": "hi"},
+               headers={"X-Requested-With": "unirouter"}).json()
+    assert r["ok"] and r["dims"] == 3
+
+
+# ------------------------------------------------------------------ audio
+def _set_opts(st, pid, **kw):
+    opts = dict(st.store.providers[pid]["options"])
+    for k, v in kw.items():
+        if v is None:
+            opts.pop(k, None)
+        else:
+            opts[k] = v
+    st.store.upsert_provider({"id": pid, "options": opts})
+
+
+def test_transcription_json_text_and_fallback(env):
+    st = env["st"]
+    _set_opts(st, "mock", stt_model="stt-fail")
+    _set_opts(st, "mock2", stt_model="whisper-x")
+    try:
+        r = oa(env).audio.transcriptions.create(model="whisper-1", file=("a.webm", b"x" * 100, "audio/webm"),
+                                                language="vi")
+        assert r.text == "xin chào thế giới"
+        sent = env["mock"].last_body["stt:whisper-x"]
+        assert sent["fields"]["language"] == "vi" and sent["filename"] == "a.webm" and sent["size"] == 100
+        r = httpx.post(env["base"] + "/v1/audio/transcriptions", headers={"Authorization": "Bearer master-test"},
+                       files={"file": ("a.mp3", b"y" * 10, "audio/mpeg")}, data={"response_format": "text"})
+        assert r.status_code == 200 and r.text == "xin chào thế giới"
+        assert r.headers["x-unirouter-target"] == "mk2/whisper-x"
+    finally:
+        _set_opts(st, "mock", stt_model=None)
+        _set_opts(st, "mock2", stt_model=None)
+        st.health.conns.clear()
+
+
+def test_transcription_requires_file(env):
+    r = httpx.post(env["base"] + "/v1/audio/transcriptions", headers={"Authorization": "Bearer master-test"},
+                   data={"model": "auto"})
+    assert r.status_code == 400
+
+
+def test_speech_openai_compat(env):
+    r = httpx.post(env["base"] + "/v1/audio/speech", headers={"Authorization": "Bearer master-test"},
+                   json={"model": "mk/x-tts", "input": "Xin chào", "voice": "alloy"})
+    assert r.status_code == 200 and r.content == b"ID3oai-audio" and r.headers["content-type"] == "audio/mpeg"
+
+
+def test_speech_azure_ssml_voice_and_speed(env):
+    st = env["st"]
+    st.store.upsert_provider({"id": "azure-speech", "base_url": env["up"] + "/azure"})
+    cid = st.store.add_connection("azure-speech", "az1", {"api_key": "az-good"})["id"]
+    try:
+        r = oa(env).audio.speech.create(model="tts-1", voice="alloy", input="Tôi & bạn <3", speed=1.25)
+        assert r.content == b"ID3azure-audio"
+        last = env["mock"].last_body["azure"]
+        assert "vi-VN-HoaiMyNeural" in last["ssml"] and "Tôi &amp; bạn &lt;3" in last["ssml"]
+        assert "rate='+25%'" in last["ssml"] and "xml:lang='vi-VN'" in last["ssml"]
+        assert last["headers"]["x-microsoft-outputformat"] == "audio-24khz-48kbitrate-mono-mp3"
+        r = httpx.post(env["base"] + "/v1/audio/speech", headers={"Authorization": "Bearer master-test"},
+                       json={"model": "az/vi-VN-NamMinhNeural", "input": "chào", "response_format": "wav"})
+        assert r.status_code == 200 and r.headers["content-type"] == "audio/wav"
+        assert "vi-VN-NamMinhNeural" in env["mock"].last_body["azure"]["ssml"]
+        # Azure không bị dùng cho chat auto
+        assert all(t.provider["id"] != "azure-speech" for t in st.router.auto_targets("chat"))
+        c = httpx.Client(base_url=env["base"])
+        c.post("/admin/api/login", json={"username": "admin", "password": "pw"})
+        h = {"X-Requested-With": "unirouter"}
+        r = c.post(f"/admin/api/connections/{cid}/test", json={}, headers=h).json()
+        assert r["ok"], r
+        r = c.post("/admin/api/providers/azure-speech/fetch-models", json={}, headers=h).json()
+        assert r["models"][:2] == ["vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"]
+        r = c.post("/admin/api/playground/speech", json={"model": "auto", "input": "xin chào"}, headers=h).json()
+        assert r["ok"] and r["audio"].startswith("data:audio/mpeg;base64,")
+        r = c.post("/admin/api/playground/transcribe", headers=h, data={"model": "mk/whisper-x"},
+                   files={"file": ("rec.webm", b"z" * 20, "audio/webm")}).json()
+        assert r["ok"] and r["text"] == "xin chào thế giới"
+    finally:
+        st.store.delete_connection(cid)
+        st.health.conns.clear()
+
+
+def test_speech_none_configured(env):
+    r = httpx.post(env["base"] + "/v1/audio/speech", headers={"Authorization": "Bearer master-test"},
+                   json={"input": "x"})
+    assert r.status_code == 503 and "Azure" in r.json()["error"]["message"]
+
+
+def test_speech_edge_tts_no_key(env, monkeypatch):
+    import sys
+    import types
+    seen = {}
+
+    class FakeComm:
+        def __init__(self, text, voice, rate="+0%", **kw):
+            seen.update(text=text, voice=voice, rate=rate)
+
+        async def stream(self):
+            if seen["voice"] == "xx-XX-NopeNeural":
+                raise type("NoAudioReceived", (Exception,), {})("no audio")
+            yield {"type": "WordBoundary"}
+            yield {"type": "audio", "data": b"ID3edge"}
+            yield {"type": "audio", "data": b"-audio"}
+
+    async def list_voices():
+        return [{"ShortName": "en-US-AvaNeural"}, {"ShortName": "vi-VN-NamMinhNeural"},
+                {"ShortName": "vi-VN-HoaiMyNeural"}, {"ShortName": "fr-FR-VivienneMultilingualNeural"}]
+
+    monkeypatch.setitem(sys.modules, "edge_tts", types.SimpleNamespace(Communicate=FakeComm, list_voices=list_voices))
+    st = env["st"]
+    c = httpx.Client(base_url=env["base"])
+    c.post("/admin/api/login", json={"username": "admin", "password": "pw"})
+    h = {"X-Requested-With": "unirouter"}
+    r = c.post("/admin/api/providers/edge-tts/connections", json={}, headers=h).json()
+    assert r["added"] == 1 and r["test"]["ok"], r
+    try:
+        r = httpx.post(env["base"] + "/v1/audio/speech", headers={"Authorization": "Bearer master-test"},
+                       json={"model": "tts-1", "input": "Xin chào", "voice": "vi-VN-NamMinhNeural", "speed": 0.8})
+        assert r.status_code == 200 and r.content == b"ID3edge-audio"
+        assert r.headers["x-unirouter-target"].startswith("edge/")
+        assert seen == {"text": "Xin chào", "voice": "vi-VN-NamMinhNeural", "rate": "-20%"}
+        r = httpx.post(env["base"] + "/v1/audio/speech", headers={"Authorization": "Bearer master-test"},
+                       json={"model": "edge/xx-XX-NopeNeural", "input": "x"})
+        assert r.status_code == 400
+        r = c.post("/admin/api/providers/edge-tts/fetch-models", json={}, headers=h).json()
+        assert r["models"] == ["vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural", "fr-FR-VivienneMultilingualNeural",
+                               "en-US-AvaNeural"]
+        assert all(t.provider["id"] != "edge-tts" for t in st.router.auto_targets("chat"))
+    finally:
+        for cn in st.store.provider_connections("edge-tts"):
+            st.store.delete_connection(cn["id"])
+        st.health.conns.clear()

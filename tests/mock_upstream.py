@@ -84,6 +84,82 @@ async def oai_chat(request: Request):
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
+PNG_B64 = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 32).decode()
+
+
+@app.post("/oai/v1/embeddings")
+async def oai_embeddings(request: Request):
+    body = await request.json()
+    model = body["model"]
+    calls["emb:" + model] = calls.get("emb:" + model, 0) + 1
+    last_body["emb:" + model] = body
+    if model == "emb-fail":
+        return JSONResponse({"error": {"message": "embedding backend down"}}, 503)
+    if model == "emb-needtype" and "input_type" not in body:
+        return JSONResponse({"error": {"message": "'input_type' parameter is required for asymmetric models"}}, 400)
+    inputs = body["input"] if isinstance(body["input"], list) else [body["input"]]
+    return {"object": "list", "model": model,
+            "data": [{"object": "embedding", "index": i, "embedding": [0.1, 0.2, 0.3]} for i, _ in enumerate(inputs)],
+            "usage": {"prompt_tokens": 7, "total_tokens": 7}}
+
+
+@app.post("/oai/v1/images/generations")
+async def oai_images(request: Request):
+    body = await request.json()
+    model = body["model"]
+    calls["img:" + model] = calls.get("img:" + model, 0) + 1
+    last_body["img:" + model] = body
+    if model == "img-fail":
+        return JSONResponse({"error": {"message": "image backend down"}}, 500)
+    if model == "img-url":
+        return {"created": 1, "data": [{"url": "https://cdn.example.com/a.png"}]}
+    if "response_format" in body and model == "img-noformat":
+        return JSONResponse({"error": {"message": "Unknown parameter: response_format"}}, 400)
+    return {"created": 1, "data": [{"b64_json": PNG_B64}]}
+
+
+@app.post("/oai/v1/audio/transcriptions")
+async def oai_stt(request: Request):
+    form = await request.form()
+    model = form["model"]
+    calls["stt:" + model] = calls.get("stt:" + model, 0) + 1
+    f = form["file"]
+    last_body["stt:" + model] = {"fields": {k: v for k, v in form.items() if k != "file"},
+                                 "filename": f.filename, "size": len(await f.read())}
+    if model == "stt-fail":
+        return JSONResponse({"error": {"message": "whisper down"}}, 503)
+    if form.get("response_format") == "text":
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse("xin chào thế giới")
+    return {"text": "xin chào thế giới", "language": "vi"}
+
+
+@app.post("/oai/v1/audio/speech")
+async def oai_tts(request: Request):
+    from fastapi.responses import Response
+    body = await request.json()
+    calls["tts:" + body["model"]] = calls.get("tts:" + body["model"], 0) + 1
+    if body["model"] == "tts-fail":
+        return JSONResponse({"error": {"message": "tts down"}}, 500)
+    return Response(b"ID3oai-audio", media_type="audio/mpeg")
+
+
+@app.post("/azure/cognitiveservices/v1")
+async def azure_tts(request: Request):
+    from fastapi.responses import Response
+    ssml = (await request.body()).decode()
+    last_body["azure"] = {"ssml": ssml, "headers": dict(request.headers)}
+    if request.headers.get("ocp-apim-subscription-key") != "az-good":
+        return Response(status_code=401)
+    return Response(b"ID3azure-audio", media_type="audio/mpeg")
+
+
+@app.get("/azure/cognitiveservices/voices/list")
+async def azure_voices(request: Request):
+    return [{"ShortName": "en-US-AvaNeural"}, {"ShortName": "vi-VN-NamMinhNeural"}, {"ShortName": "vi-VN-HoaiMyNeural"},
+            {"ShortName": "en-US-AndrewMultilingualNeural"}, {"ShortName": "ja-JP-NanamiNeural"}]
+
+
 @app.get("/oai/v1/models")
 async def oai_models():
     return {"data": [{"id": "m1"}, {"id": "m2"}]}
@@ -122,7 +198,13 @@ async def codex(request: Request):
             calls["gpt-slow-finished"] = calls.get("gpt-slow-finished", 0) + 1
             yield ev({"type": "response.completed", "response": {"usage": {}}})
             return
-        if model == "gpt-tool":
+        if isinstance(body.get("tool_choice"), dict) and body["tool_choice"].get("type") == "image_generation":
+            item = {"id": "ig_1", "type": "image_generation_call", "status": "completed", "result": PNG_B64,
+                    "revised_prompt": "a cat"}
+            yield ev({"type": "response.output_item.added", "output_index": 0, "item": {**item, "result": None}})
+            yield ev({"type": "response.output_item.done", "output_index": 0, "item": item})
+            out = [item]
+        elif model == "gpt-tool":
             item = {"id": "fc_1", "type": "function_call", "call_id": "call_abc", "name": "get_weather", "arguments": ""}
             yield ev({"type": "response.output_item.added", "output_index": 0, "item": item})
             yield ev({"type": "response.function_call_arguments.delta", "item_id": "fc_1", "delta": "{\"city\":\"Hue\"}"})
