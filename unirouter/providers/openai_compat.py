@@ -31,10 +31,24 @@ def build_body(target: Target, ctx: CallContext) -> dict[str, Any]:
     return body
 
 
+# Header tự thêm theo domain (người dùng không cần biết/nhập)
+AUTO_HEADERS = {
+    "openrouter.ai": {"HTTP-Referer": "https://github.com/traique/unirouter", "X-Title": "UniRouter"},
+}
+
+
+def auto_headers(base_url: str) -> dict[str, str]:
+    for domain, hdrs in AUTO_HEADERS.items():
+        if domain in base_url:
+            return dict(hdrs)
+    return {}
+
+
 def headers_for(provider: dict[str, Any], secret: dict[str, Any]) -> dict[str, str]:
     h = {"Content-Type": "application/json", "Accept": "text/event-stream"}
     if secret.get("api_key"):
         h["Authorization"] = f"Bearer {secret['api_key']}"
+    h.update(auto_headers(provider.get("base_url") or ""))
     for k, v in (provider.get("headers") or {}).items():
         h[str(k)] = str(v)
     return h
@@ -132,26 +146,40 @@ async def iter_sse(resp: httpx.Response) -> AsyncIterator[str]:
 class OpenAICompatProvider(Provider):
     type = "openai"
 
+    def __init__(self, on_option_learned=None):
+        self.on_option_learned = on_option_learned  # lưu lại tùy chọn tự học được vào DB
+
     async def open(self, target: Target, connection: dict[str, Any], ctx: CallContext) -> AsyncIterator[Event]:
         secret = connection["_secret"]
         provider = target.provider
         url = provider["base_url"].rstrip("/") + "/chat/completions"
         body = build_body(target, ctx)
         client = http.client()
-        req = client.build_request("POST", url, json=body, headers=headers_for(provider, secret))
-        try:
-            resp = await client.send(req, stream=True)
-        except httpx.TimeoutException as e:
-            raise ProviderError(504, f"Timeout khi kết nối {provider['name']}: {e}") from e
-        except httpx.HTTPError as e:
-            raise ProviderError(502, f"Lỗi mạng tới {provider['name']}: {e}") from e
+        for attempt in range(2):
+            req = client.build_request("POST", url, json=body, headers=headers_for(provider, secret))
+            try:
+                resp = await client.send(req, stream=True)
+            except httpx.TimeoutException as e:
+                raise ProviderError(504, f"Timeout khi kết nối {provider['name']}: {e}") from e
+            except httpx.HTTPError as e:
+                raise ProviderError(502, f"Lỗi mạng tới {provider['name']}: {e}") from e
 
-        if resp.status_code >= 400:
+            if resp.status_code < 400:
+                return self._events(resp)
             raw = await resp.aread()
             await resp.aclose()
-            raise classify_http(resp.status_code, http.error_message(raw, resp.status_code), http.retry_after(resp.headers))
-
-        return self._events(resp)
+            msg = http.error_message(raw, resp.status_code)
+            # Tự nhận biết provider không hỗ trợ stream_options -> bỏ đi, ghi nhớ, thử lại 1 lần
+            if (attempt == 0 and "stream_options" in body and resp.status_code in (400, 422)
+                    and any(k in msg.lower() for k in ("stream_options", "include_usage", "unrecognized", "unknown field",
+                                                       "extra inputs", "not permitted", "additional properties"))):
+                provider.setdefault("options", {})["stream_usage"] = False
+                if self.on_option_learned:
+                    self.on_option_learned(provider["id"], "stream_usage", False)
+                body.pop("stream_options", None)
+                continue
+            raise classify_http(resp.status_code, msg, http.retry_after(resp.headers))
+        raise ProviderError(502, "Provider từ chối request")
 
     async def _events(self, resp: httpx.Response) -> AsyncIterator[Event]:
         parser = ChunkParser()
