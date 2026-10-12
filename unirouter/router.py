@@ -1,9 +1,10 @@
 """Định tuyến: model/combo -> danh sách đích -> chọn tài khoản -> fallback.
 
-- Combo (alias) với 4 chiến lược: priority, round_robin, least_latency, random (ý tưởng từ OmniRoute/9router)
-- Nhiều tài khoản cho mỗi provider, xoay vòng hoặc dùng lần lượt (9router)
-- Circuit breaker + cooldown theo Retry-After / reset quota (apirouter + 9router)
-- Chỉ đổi provider khi CHƯA gửi dữ liệu nào cho client (apirouter)
+- Combo (alias) với 4 chiến lược: priority, round_robin, least_latency, random
+- Nhiều tài khoản cho mỗi provider, xoay vòng hoặc dùng lần lượt
+- Circuit breaker + cooldown theo Retry-After / thời điểm reset hạn mức
+- Chỉ đổi provider khi CHƯA gửi dữ liệu nào cho client
+- Embeddings, tạo ảnh, chuyển giọng nói <-> chữ dùng chung cơ chế chọn đích/fallback (Router.call)
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .health import Health
-from .providers.base import CallContext, Event, Provider, ProviderError, Target
+from .providers.base import CallContext, Event, Provider, ProviderError, Target, model_kind
 
 
 AUTO_MODEL = "auto"
@@ -61,29 +62,45 @@ class Router:
         p = self.store.providers[pid]
         return Target(p, model, f"{p['alias']}/{model}")
 
-    def resolve(self, name: str, _depth: int = 0, allow_default: bool = True) -> tuple[list[Target], str]:
+    def resolve(self, name: str, _depth: int = 0, allow_default: bool = True,
+                kind: str = "chat") -> tuple[list[Target], str]:
         """Trả về (danh sách đích theo thứ tự thử, chiến lược)."""
         name = (name or "").strip()
         store = self.store
         if not name:
-            if _depth == 0 and allow_default:
+            if kind != "chat":
+                name = AUTO_MODEL  # tạo ảnh/embeddings: client hay bỏ trống model
+            elif _depth == 0 and allow_default:
                 return self.resolve(store.setting("default_model") or AUTO_MODEL, 1)
-            raise GatewayError(400, "Thiếu tham số model")
+            else:
+                raise GatewayError(400, "Thiếu tham số model")
 
         combo = store.combos.get(name.lower())
         if combo and combo["enabled"]:
             targets: list[Target] = []
             for spec in combo["targets"]:
                 try:
-                    sub, _ = self.resolve(spec, _depth + 1) if _depth < 3 else ([], "")
+                    sub, _ = self.resolve(spec, _depth + 1, kind=kind) if _depth < 3 else ([], "")
                 except GatewayError:
                     continue
                 targets.extend(sub)
             return self._order(targets, combo["strategy"], f"combo:{combo['name']}"), combo["strategy"]
 
         if name.lower() == AUTO_MODEL and AUTO_MODEL not in store.combos:
-            targets = self.auto_targets()
+            targets = self.auto_targets(kind)
             if not targets:
+                if kind == "embeddings":
+                    raise GatewayError(503, "Chưa có provider nào có model embedding. Thêm key NVIDIA, Gemini, Mistral "
+                                            "hoặc GitHub Models, hoặc đặt \"Model embedding\" khi sửa provider.")
+                if kind == "images":
+                    raise GatewayError(503, "Chưa có provider nào tạo được ảnh. Đăng nhập ChatGPT hoặc đặt "
+                                            "\"Model tạo ảnh\" khi sửa provider.")
+                if kind == "transcriptions":
+                    raise GatewayError(503, "Chưa có provider nào chuyển giọng nói thành chữ. Thêm key Groq "
+                                            "(Whisper miễn phí) hoặc Mistral.")
+                if kind == "speech":
+                    raise GatewayError(503, "Chưa có provider nào chuyển chữ thành giọng nói. Bật Microsoft Edge TTS "
+                                            "(không cần key) hoặc thêm key Azure Speech (gói miễn phí F0).")
                 raise GatewayError(503, "Chưa có provider nào có API key/tài khoản. Vào /admin → Providers để thêm.")
             return targets, "priority"
 
@@ -94,29 +111,60 @@ class Router:
                 return [self._target(pid, model)], "priority"
 
         # Tên model trần: tìm trong danh sách model của các provider
-        matches = [self._target(pid, name) for pid, p in store.providers.items() if p["enabled"] and name in p["models"]]
+        matches = [self._target(pid, name) for pid, p in store.providers.items()
+                   if p["enabled"] and (name in p["models"] or name == self.kind_model(p, kind))]
         if matches:
             return matches, "priority"
 
+        if kind != "chat":
+            if _depth == 0 and allow_default and store.setting("unknown_model_fallback"):
+                return self.resolve(AUTO_MODEL, 1, kind=kind)
+            raise GatewayError(404, f"Không tìm thấy model '{name}'. Dùng dạng provider/model hoặc \"auto\".")
         default = store.setting("default_model") or AUTO_MODEL
         if _depth == 0 and allow_default and store.setting("unknown_model_fallback") and default.lower() != name.lower():
             return self.resolve(default, 1)
         raise GatewayError(404, f"Không tìm thấy model hoặc combo '{name}'. Dùng dạng provider/model "
                                 f"(vd: cx/gpt-5.5) hoặc tạo combo trong /admin.")
 
-    def auto_targets(self) -> list[Target]:
+    @staticmethod
+    def kind_model(p: dict[str, Any], kind: str) -> str | None:
+        """Model provider dùng khi gọi "auto" cho từng loại (chat / embeddings / images)."""
+        opts = p.get("options") or {}
+        key = {"chat": "auto_model", "embeddings": "embedding_model", "images": "image_model",
+               "transcriptions": "stt_model", "speech": "tts_model"}[kind]
+        if p["type"] in ("azure", "edge") and kind != "speech":
+            return None  # provider chỉ dùng cho giọng nói
+        if key in opts:
+            return opts[key] or None  # chuỗi rỗng = tắt loại này cho provider
+        found = next((m for m in p["models"] if model_kind(m) == kind), None)
+        if found:
+            return found
+        if kind == "chat":
+            return next((m for m in p["models"] if model_kind(m) == "chat"), None)
+        if kind == "speech" and p["type"] in ("azure", "edge"):
+            return p["models"][0] if p["models"] else "vi-VN-HoaiMyNeural"
+        if kind == "images" and p["type"] == "codex":
+            return "gpt-image"
+        return None
+
+    def auto_targets(self, kind: str = "chat") -> list[Target]:
         """Model "auto": mọi provider đã có tài khoản, mỗi provider 1 model ưu tiên, thử lần lượt.
 
-        Không cần tạo combo: thêm provider là dùng được ngay (giống 9router).
+        Không cần tạo combo: thêm provider là dùng được ngay.
         """
         out: list[Target] = []
         for pid, p in self.store.providers.items():
-            if not p["enabled"] or not p["models"]:
+            if not p["enabled"]:
                 continue
             if not any(c["enabled"] for c in self.store.provider_connections(pid)):
                 continue
-            model = (p.get("options") or {}).get("auto_model") or p["models"][0]
-            out.append(self._target(pid, model))
+            model = self.kind_model(p, kind)
+            if model:
+                out.append(self._target(pid, model))
+        if kind == "images":  # tạo ảnh qua ChatGPT là thử nghiệm -> để cuối
+            out.sort(key=lambda t: t.provider["type"] == "codex")
+        if kind == "speech":  # giọng Microsoft đọc tiếng Việt tốt -> ưu tiên (Azure chính thức trước, Edge sau)
+            out.sort(key=lambda t: {"azure": 0, "edge": 1}.get(t.provider["type"], 2))
         return out
 
     def _order(self, targets: list[Target], strategy: str, key: str) -> list[Target]:
@@ -216,6 +264,62 @@ class Router:
             msg = f"Tất cả {len(attempts)} lượt thử đều lỗi. Lỗi cuối ({attempts[-1]['target']}): {last.message}"
         else:
             msg = last.message
+        raise GatewayError(status, msg, attempts)
+
+    async def call(self, kind: str, requested: str, body: dict[str, Any],
+                   allow_default: bool = True) -> tuple[Any, Target, dict[str, Any], list[dict[str, Any]], int]:
+        """Gọi endpoint một lần (embeddings, tạo ảnh, giọng nói) với cùng cơ chế chọn đích và fallback."""
+        targets, _ = self.resolve(requested, allow_default=allow_default, kind=kind)
+        attempts: list[dict[str, Any]] = []
+        last: ProviderError | None = None
+        waits: list[float] = []
+        for target in targets:
+            provider = target.provider
+            impl = self.impls.get(provider["type"])
+            if not provider["enabled"] or impl is None:
+                attempts.append({"target": target.label, "error": "provider đang tắt"})
+                continue
+            conns = self._connections(provider)
+            if not conns:
+                attempts.append({"target": target.label, "error": "chưa có tài khoản/API key"})
+                continue
+            for conn in conns:
+                cid = conn["id"]
+                if not self.health.available(cid):
+                    waits.append(self.health.wait_seconds(cid))
+                    attempts.append({"target": target.label, "account": conn["label"],
+                                     "error": f"đang tạm khóa {int(self.health.wait_seconds(cid))}s"})
+                    continue
+                started = time.monotonic()
+                try:
+                    use = {**conn, "_secret": self.store.connection_secret(cid)}
+                    data = await getattr(impl, kind)(target, use, body)
+                except ProviderError as err:
+                    self._fail(target, conn, err, started, attempts)
+                    last = err
+                    if err.scope == "request":
+                        raise GatewayError(err.status, err.message, attempts) from err
+                    if err.scope == "account":
+                        continue
+                    break
+                except Exception as e:  # noqa: BLE001
+                    err = ProviderError(502, f"{type(e).__name__}: {e}")
+                    self._fail(target, conn, err, started, attempts)
+                    last = err
+                    break
+                ms = int((time.monotonic() - started) * 1000)
+                self.store.touch_connection(cid)
+                self.health.success(cid)
+                self.health.record_latency(target.key, ms, True)
+                return data, target, conn, attempts, ms
+        if last is None and waits:
+            raise GatewayError(429, f"Tất cả tài khoản đang bị giới hạn, thử lại sau {int(min(waits)) + 1}s", attempts)
+        if last is None:
+            detail = "; ".join(f"{a['target']}: {a['error']}" for a in attempts) or "không có đích khả dụng"
+            raise GatewayError(503, f"Không có provider khả dụng cho '{requested or 'auto'}' ({detail})", attempts)
+        status = last.status if last.status in (400, 401, 403, 404, 413, 422, 429) else 502
+        msg = (f"Tất cả {len(attempts)} lượt thử đều lỗi. Lỗi cuối ({attempts[-1]['target']}): {last.message}"
+               if len(attempts) > 1 else last.message)
         raise GatewayError(status, msg, attempts)
 
     def _fail(self, target: Target, conn: dict[str, Any], err: ProviderError, started: float,

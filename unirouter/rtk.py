@@ -1,4 +1,4 @@
-"""RTK Token Saver (port rút gọn từ 9router/open-sse/rtk).
+"""RTK Token Saver.
 
 Nén nội dung tool_result (git diff, grep, log lặp, output rất dài...) trong request
 trước khi gửi lên provider. Không bao giờ làm output dài hơn hay rỗng; bỏ qua lỗi.

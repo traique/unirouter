@@ -7,7 +7,7 @@ import os
 import secrets
 from pathlib import Path
 
-VERSION = "1.2.1"
+VERSION = "1.4.1"
 
 
 def load_dotenv(*paths: Path) -> list[str]:
@@ -59,6 +59,9 @@ ADMIN_PASSWORD = _env("ADMIN_PASSWORD")
 # Key "master" dùng được cho mọi model (tùy chọn). Key cho từng client tạo trong /admin.
 MASTER_API_KEY = _env("MASTER_API_KEY")
 COOKIE_SECURE = _env("COOKIE_SECURE", "auto").lower()  # auto | true | false
+
+# Địa chỉ public của app (vd https://ai.example.com), dùng tạo link ảnh. Để trống = lấy từ request.
+PUBLIC_URL = _env("PUBLIC_URL").rstrip("/")
 
 REQUEST_TIMEOUT = float(_env("REQUEST_TIMEOUT", "300"))
 CONNECT_TIMEOUT = float(_env("CONNECT_TIMEOUT", "15"))

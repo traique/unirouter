@@ -1,14 +1,19 @@
 """Trang quản trị /admin và API /admin/api/*."""
 from __future__ import annotations
 
+import base64
 import hmac
+import os
+import sqlite3
+import tempfile
 import time
 import uuid
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from starlette.background import BackgroundTask
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from . import config
@@ -190,6 +195,7 @@ async def list_providers(request: Request):
         item = {k: p.get(k) for k in ("id", "alias", "name", "type", "base_url", "models", "headers", "options", "note",
                                       "enabled", "builtin", "signup_url", "free")}
         item["connections"] = [connection_view(st, c) for c in st.store.provider_connections(p["id"])]
+        item["kinds"] = {k: st.router.kind_model(p, k) for k in ("embeddings", "images", "transcriptions", "speech")}
         item["latency"] = {m: round(st.health.latency(f"{p['id']}/{m}")) for m in p["models"]
                            if 0 < st.health.latency(f"{p['id']}/{m}") < 1e8}
         out.append(item)
@@ -285,19 +291,24 @@ async def add_connection(pid: str, request: Request):
     if p["type"] == "codex":
         raise HTTPException(400, "ChatGPT dùng đăng nhập thiết bị hoặc nhập auth.json")
     keys = [k.strip() for k in str(data.get("api_key") or "").replace(",", "\n").split("\n") if k.strip()]
+    if p["type"] == "edge":  # không cần key: chỉ tạo 1 kết nối để bật
+        keys = ["edge"]
     if not keys:
         raise HTTPException(400, "Nhập ít nhất 1 API key (mỗi dòng 1 key để thêm nhiều)")
     label = str(data.get("label") or p["name"]).strip()
     first = None
     for i, k in enumerate(keys):
-        c = st.store.add_connection(pid, label if len(keys) == 1 else f"{label} #{i + 1}", {"api_key": k},
+        secret = {"api_key": k}
+        if p["type"] == "azure" and str(data.get("region") or "").strip():
+            secret["region"] = str(data["region"]).strip().lower()
+        c = st.store.add_connection(pid, label if len(keys) == 1 else f"{label} #{i + 1}", secret,
                                     priority=int(data.get("priority") or 0))
         first = first or c
     error = None
     if not st.store.providers[pid]["models"]:  # provider chưa có model -> tự lấy bằng key vừa nhập
         try:
-            models = await st.providers["openai"].list_models(st.store.providers[pid],
-                                                               {**first, "_secret": {"api_key": keys[0]}})
+            models = await st.providers[p["type"]].list_models(st.store.providers[pid],
+                                                                {**first, "_secret": st.store.connection_secret(first["id"])})
             if models:
                 st.store.upsert_provider({"id": pid, "models": models})
         except ProviderError as e:
@@ -306,9 +317,9 @@ async def add_connection(pid: str, request: Request):
             error = str(e)
     prov = st.store.providers[pid]
     test = None
-    if prov["models"]:
-        model = (prov.get("options") or {}).get("auto_model") or prov["models"][0]
-        test = await run_test(st, prov, {**first, "_secret": {"api_key": keys[0]}}, model)
+    model = test_model(st, prov)
+    if model:
+        test = await run_test(st, prov, {**first, "_secret": st.store.connection_secret(first["id"])}, model)
     return {"ok": True, "added": len(keys), "models": len(prov["models"]), "error": error, "test": test}
 
 
@@ -357,15 +368,34 @@ async def test_connection(cid: str, request: Request):
     st = S(request)
     provider, conn = _conn_with_secret(st, cid)
     data = await request.json() if (await request.body()) else {}
-    model = data.get("model") or (provider.get("options") or {}).get("auto_model") or \
-        (provider["models"][0] if provider["models"] else "")
+    model = data.get("model") or test_model(st, provider)
     if not model:
         raise HTTPException(400, "Provider chưa có model nào")
     return await run_test(st, provider, conn, model)
 
 
+def test_model(st, provider: dict[str, Any]) -> str | None:
+    if provider["type"] in ("azure", "edge"):
+        return st.router.kind_model(provider, "speech")
+    return st.router.kind_model(provider, "chat")
+
+
 async def run_test(st, provider: dict[str, Any], conn: dict[str, Any], model: str) -> dict[str, Any]:
     cid = conn["id"]
+    if provider["type"] in ("azure", "edge"):  # provider giọng nói: đọc thử một câu ngắn
+        t0 = time.monotonic()
+        try:
+            audio, _ = await st.providers[provider["type"]].speech(Target(provider, model, f"{provider['alias']}/{model}"),
+                                                          conn, {"input": "Xin chào", "voice": model})
+        except ProviderError as e:
+            st.store.set_connection_error(cid, f"[{e.status}] {e.message}"[:300])
+            return {"ok": False, "status": e.status, "error": e.message, "ms": int((time.monotonic() - t0) * 1000)}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": f"{type(e).__name__}: {e}", "ms": int((time.monotonic() - t0) * 1000)}
+        st.store.set_connection_error(cid, None)
+        st.health.reset(cid)
+        return {"ok": True, "model": model, "reply": f"đã tạo {len(audio) // 1024} KB âm thanh",
+                "ms": int((time.monotonic() - t0) * 1000)}
     body = {"model": model, "messages": [{"role": "user", "content": "Reply with exactly: OK"}], "max_tokens": 16}
     ctx = CallContext(body, False, "test")
     t0 = time.monotonic()
@@ -544,8 +574,18 @@ async def delete_combo(name: str, request: Request):
 async def list_keys(request: Request):
     require_admin(request)
     st = S(request)
-    return {"data": [{k: v for k, v in key.items() if k != "key_hash"} for key in
-                     sorted(st.store.keys.values(), key=lambda k: k["created_at"])]}
+    st.usage.flush()
+    since = now_ms() - 24 * 3600_000
+    stats = {r["key_name"]: dict(r) for r in st.store.q(
+        "SELECT key_name, COUNT(*) n, SUM(status>=400) err, "
+        "SUM(COALESCE(input_tokens,0)+COALESCE(output_tokens,0)) tok FROM usage WHERE ts>=? GROUP BY key_name", (since,))}
+    out = []
+    for key in sorted(st.store.keys.values(), key=lambda k: k["created_at"]):
+        item = {k: v for k, v in key.items() if k != "key_hash"}
+        s = stats.get(key["name"]) or {}
+        item["usage_24h"] = {"n": s.get("n") or 0, "err": s.get("err") or 0, "tok": s.get("tok") or 0}
+        out.append(item)
+    return {"data": out}
 
 
 @router.post("/admin/api/keys")
@@ -603,7 +643,121 @@ async def save_settings(request: Request):
     return {"ok": True}
 
 
+# ------------------------------------------------------------------ backup
+@router.get("/admin/api/backup")
+async def backup(request: Request):
+    """Tải bản sao SQLite (token/API key trong đó vẫn được mã hóa bằng SECRET_KEY)."""
+    require_admin(request)
+    st = S(request)
+    st.usage.flush()
+    fd, tmp = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    dst = sqlite3.connect(tmp)
+    try:
+        with st.store.lock:
+            st.store.conn.backup(dst)
+    finally:
+        dst.close()
+    name = time.strftime("unirouter-%Y%m%d-%H%M.db")
+    return FileResponse(tmp, filename=name, media_type="application/octet-stream",
+                        background=BackgroundTask(lambda: os.path.exists(tmp) and os.remove(tmp)))
+
+
 # ------------------------------------------------------------------ playground
+@router.post("/admin/api/playground/image")
+async def playground_image(request: Request):
+    require_admin(request)
+    from .api import finish_images
+    st = S(request)
+    data = await request.json()
+    model = str(data.get("model") or "")
+    body = {"prompt": str(data.get("prompt") or "").strip(), "n": 1}
+    if not body["prompt"]:
+        raise HTTPException(400, "Nhập mô tả ảnh")
+    if data.get("size"):
+        body["size"] = str(data["size"])
+    t0 = time.monotonic()
+    try:
+        res, target, conn, attempts, _ = await st.router.call("images", model, body)
+    except GatewayError as e:
+        return {"ok": False, "status": e.status, "error": e.message, "attempts": e.attempts}
+    finish_images(request, res, "url")
+    ms = int((time.monotonic() - t0) * 1000)
+    st.usage.add(key_name="admin", endpoint="images", requested_model=model or "auto", provider=target.provider["id"],
+                 model=target.model, connection=conn["label"], status=200, latency_ms=ms, ttfb_ms=ms,
+                 output_tokens=len(res.get("data") or []), attempts=len(attempts) + 1)
+    return {"ok": True, "target": target.label, "account": conn["label"], "attempts": attempts, "total_ms": ms,
+            "images": [{"url": i.get("url"), "revised_prompt": i.get("revised_prompt")}
+                       for i in res.get("data") or [] if isinstance(i, dict)]}
+
+
+@router.post("/admin/api/playground/speech")
+async def playground_speech(request: Request):
+    require_admin(request)
+    st = S(request)
+    data = await request.json()
+    model = str(data.get("model") or "")
+    text = str(data.get("input") or "").strip()
+    if not text:
+        raise HTTPException(400, "Nhập văn bản cần đọc")
+    body = {"input": text[:5000], "response_format": "mp3"}
+    if data.get("voice"):
+        body["voice"] = str(data["voice"])
+    if data.get("speed"):
+        body["speed"] = float(data["speed"])
+    t0 = time.monotonic()
+    try:
+        (audio, ctype), target, conn, attempts, _ = await st.router.call("speech", model, body)
+    except GatewayError as e:
+        return {"ok": False, "status": e.status, "error": e.message, "attempts": e.attempts}
+    ms = int((time.monotonic() - t0) * 1000)
+    st.usage.add(key_name="admin", endpoint="speech", requested_model=model or "auto", provider=target.provider["id"],
+                 model=target.model, connection=conn["label"], status=200, latency_ms=ms, ttfb_ms=ms,
+                 attempts=len(attempts) + 1)
+    return {"ok": True, "target": target.label, "account": conn["label"], "attempts": attempts, "total_ms": ms,
+            "size": len(audio), "audio": f"data:{ctype};base64,{base64.b64encode(audio).decode()}"}
+
+
+@router.post("/admin/api/playground/transcribe")
+async def playground_transcribe(request: Request):
+    require_admin(request)
+    from .api import read_audio_form
+    st = S(request)
+    body = await read_audio_form(request)
+    model = str(body.pop("model", "") or "")
+    t0 = time.monotonic()
+    try:
+        res, target, conn, attempts, _ = await st.router.call("transcriptions", model, body)
+    except GatewayError as e:
+        return {"ok": False, "status": e.status, "error": e.message, "attempts": e.attempts}
+    ms = int((time.monotonic() - t0) * 1000)
+    text = res.get("_text") if "_text" in res else res.get("text") or ""
+    st.usage.add(key_name="admin", endpoint="transcriptions", requested_model=model or "auto",
+                 provider=target.provider["id"], model=target.model, connection=conn["label"], status=200,
+                 latency_ms=ms, ttfb_ms=ms, attempts=len(attempts) + 1)
+    return {"ok": True, "target": target.label, "account": conn["label"], "attempts": attempts, "total_ms": ms,
+            "text": text, "language": res.get("language")}
+
+
+@router.post("/admin/api/playground/embed")
+async def playground_embed(request: Request):
+    require_admin(request)
+    st = S(request)
+    data = await request.json()
+    model = str(data.get("model") or "")
+    text = str(data.get("input") or "").strip() or "Xin chào"
+    t0 = time.monotonic()
+    try:
+        res, target, conn, attempts, _ = await st.router.call("embeddings", model, {"input": text})
+    except GatewayError as e:
+        return {"ok": False, "status": e.status, "error": e.message, "attempts": e.attempts}
+    vec = ((res.get("data") or [{}])[0] or {}).get("embedding") or []
+    return {"ok": True, "target": target.label, "account": conn["label"], "attempts": attempts,
+            "total_ms": int((time.monotonic() - t0) * 1000), "dims": len(vec) if isinstance(vec, list) else 0,
+            "preview": vec[:8] if isinstance(vec, list) else str(vec)[:80], "usage": res.get("usage")}
+
+
+
 @router.post("/admin/api/playground")
 async def playground(request: Request):
     require_admin(request)

@@ -1,4 +1,4 @@
-"""Endpoint /v1: OpenAI Chat Completions, OpenAI Responses, Anthropic Messages, Models."""
+"""Endpoint /v1: Chat Completions, Responses, Anthropic Messages, Embeddings, Images, Audio, Models."""
 from __future__ import annotations
 
 import asyncio
@@ -9,9 +9,9 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 
-from . import config, rtk
+from . import config, images, rtk
 from .formats.anthropic import AnthropicWriter, anthropic_to_chat
 from .formats.chat import ChatWriter
 from .formats.common import estimate_tokens, sse
@@ -297,6 +297,133 @@ async def count_tokens(request: Request):
     return {"input_tokens": estimate_tokens({"s": body.get("system"), "m": body.get("messages"), "t": body.get("tools")})}
 
 
+# ------------------------------------------------------------------ embeddings / images
+def public_base(request: Request) -> str:
+    return config.PUBLIC_URL or str(request.base_url).rstrip("/")
+
+
+MAX_AUDIO_BYTES = 25 * 1024 * 1024
+MAX_SPEECH_CHARS = 10000
+
+
+async def unary(request: Request, kind: str, body: dict[str, Any]) -> Response:
+    st = S(request)
+    key = authenticate(request)
+    requested = str(body.get("model") or "")
+    if not st.router.allowed(key, requested or "auto"):
+        return JSONResponse(error_body("chat", 403, f"API key không được phép dùng model '{requested or 'auto'}'"), 403)
+    log = {"key_name": key["name"], "endpoint": kind, "requested_model": requested or "auto", "rtk_saved": 0}
+    t0 = time.monotonic()
+    try:
+        data, target, conn, attempts, _ = await st.router.call(kind, requested, body,
+                                                               allow_default=not key.get("allowed_models"))
+    except Exception as e:  # noqa: BLE001
+        return failure_response(st, "chat", e, log, t0)
+    ms = int((time.monotonic() - t0) * 1000)
+    done = {**log, "provider": target.provider["id"], "model": target.model, "connection": conn["label"], "status": 200,
+            "latency_ms": ms, "ttfb_ms": ms, "attempts": len(attempts) + 1}
+    hdr = {"X-UniRouter-Target": target.label}
+    if kind == "speech":
+        audio, ctype = data
+        st.usage.add(**done, input_tokens=estimate_tokens(body.get("input") or ""), output_tokens=0)
+        return Response(audio, media_type=ctype, headers=hdr)
+    if kind == "transcriptions":
+        text = data.get("_text") if "_text" in data else data.get("text")
+        st.usage.add(**done, input_tokens=0, output_tokens=estimate_tokens(text or ""))
+        if "_text" in data:
+            return PlainTextResponse(data["_text"], media_type=data.get("_ctype") or "text/plain", headers=hdr)
+        return JSONResponse(data, headers=hdr)
+    usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+    inp = int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0)
+    outp = int(usage.get("output_tokens") or 0)
+    if kind == "embeddings":
+        if not inp:
+            inp = estimate_tokens(body.get("input"))
+        data["model"] = target.label
+        data.setdefault("object", "list")
+    else:
+        finish_images(request, data, body.get("response_format"))
+        outp = outp or len(data.get("data") or [])
+    st.usage.add(**done, input_tokens=inp, output_tokens=outp)
+    return JSONResponse(data, headers=hdr)
+
+
+def finish_images(request: Request, data: dict[str, Any], fmt: Any) -> None:
+    """Ảnh base64 -> lưu tạm và thêm url, vì nhiều bot chỉ đọc data[0].url."""
+    base = public_base(request)
+    for item in data.get("data") or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("b64_json") and not item.get("url") and fmt != "b64_json":
+            name = images.save_b64(item["b64_json"])
+            if name:
+                item["url"] = f"{base}/v1/images/files/{name}"
+                if fmt == "url":
+                    item.pop("b64_json", None)
+
+
+@router.post("/v1/embeddings")
+@router.post("/embeddings")
+async def embeddings(request: Request):
+    body = await read_json(request)
+    if body.get("input") in (None, "", []):
+        raise HTTPException(400, "Thiếu input")
+    return await unary(request, "embeddings", body)
+
+
+@router.post("/v1/images/generations")
+@router.post("/images/generations")
+async def images_generations(request: Request):
+    body = await read_json(request)
+    if not isinstance(body.get("prompt"), str) or not body["prompt"].strip():
+        raise HTTPException(400, "Thiếu prompt")
+    return await unary(request, "images", body)
+
+
+async def read_audio_form(request: Request) -> dict[str, Any]:
+    try:
+        form = await request.form()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f"Body phải là multipart/form-data có trường file: {e}") from e
+    upload = form.get("file")
+    if upload is None or isinstance(upload, str):
+        raise HTTPException(400, "Thiếu file âm thanh (trường 'file')")
+    raw = await upload.read()
+    if not raw:
+        raise HTTPException(400, "File âm thanh rỗng")
+    if len(raw) > MAX_AUDIO_BYTES:
+        raise HTTPException(413, "File âm thanh tối đa 25 MB")
+    body: dict[str, Any] = {k: v for k, v in form.items() if k != "file" and isinstance(v, str)}
+    body["_file"] = (upload.filename or "audio.webm", raw, upload.content_type or "application/octet-stream")
+    return body
+
+
+@router.post("/v1/audio/transcriptions")
+@router.post("/audio/transcriptions")
+async def audio_transcriptions(request: Request):
+    return await unary(request, "transcriptions", await read_audio_form(request))
+
+
+@router.post("/v1/audio/speech")
+@router.post("/audio/speech")
+async def audio_speech(request: Request):
+    body = await read_json(request)
+    text = body.get("input")
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(400, "Thiếu input (văn bản cần đọc)")
+    if len(text) > MAX_SPEECH_CHARS:
+        raise HTTPException(400, f"input tối đa {MAX_SPEECH_CHARS} ký tự")
+    return await unary(request, "speech", body)
+
+
+@router.get("/v1/images/files/{name}")
+async def image_file(name: str):
+    path = images.path_of(name)
+    if not path:
+        raise HTTPException(404, "Ảnh không tồn tại hoặc đã hết hạn")
+    return FileResponse(path, media_type=images.media_type(name), headers={"Cache-Control": "public, max-age=86400"})
+
+
 @router.get("/v1/models")
 @router.get("/models")
 async def models(request: Request):
@@ -312,7 +439,9 @@ async def models(request: Request):
     for p in st.store.providers.values():
         if not p["enabled"] or not any(c["enabled"] for c in st.store.provider_connections(p["id"])):
             continue
-        for m in p["models"]:
+        extra = [m for m in (st.router.kind_model(p, k) for k in ("embeddings", "images", "transcriptions", "speech"))
+                 if m and m not in p["models"]]
+        for m in [*p["models"], *extra]:
             mid = f"{p['alias']}/{m}"
             if st.router.allowed(key, mid):
                 data.append({"id": mid, "object": "model", "created": created, "owned_by": p["id"]})

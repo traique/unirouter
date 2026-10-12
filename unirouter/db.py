@@ -184,6 +184,9 @@ class Store:
                 p["models"] = json.loads(p["models"])
                 p["headers"] = json.loads(p["headers"])
                 p["options"] = json.loads(p["options"])
+                # tùy chọn mặc định mới của provider dựng sẵn (vd embedding_model) áp cho DB cũ
+                preset_opts = PRESET_BY_ID.get(p["id"], {}).get("options") or {}
+                p["options"] = {**{k: v for k, v in preset_opts.items() if k not in p["options"]}, **p["options"]}
                 p["enabled"] = bool(p["enabled"])
                 preset = PRESET_BY_ID.get(p["id"], {})
                 p["signup_url"] = preset.get("signup_url", "")
@@ -237,8 +240,8 @@ class Store:
         if "/" in alias:
             raise ValueError("alias không được chứa dấu /")
         ptype = data.get("type") or (existing or {}).get("type") or "openai"
-        if ptype not in ("openai", "codex"):
-            raise ValueError("type phải là openai hoặc codex")
+        if ptype not in ("openai", "codex", "azure", "edge"):
+            raise ValueError("type phải là openai, codex, azure hoặc edge")
         models = data.get("models", (existing or {}).get("models", []))
         if isinstance(models, str):
             models = [m.strip() for m in models.replace("\n", ",").split(",") if m.strip()]
