@@ -304,6 +304,8 @@ async def models(request: Request):
     st = S(request)
     created = int(time.time())
     data = []
+    if "auto" not in st.store.combos and st.router.allowed(key, "auto"):
+        data.append({"id": "auto", "object": "model", "created": created, "owned_by": "unirouter"})
     for c in st.store.combos.values():
         if c["enabled"] and st.router.allowed(key, c["name"]):
             data.append({"id": c["name"], "object": "model", "created": created, "owned_by": "combo"})

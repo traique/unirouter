@@ -187,8 +187,8 @@ async def list_providers(request: Request):
     st = S(request)
     out = []
     for p in st.store.providers.values():
-        item = {k: p[k] for k in ("id", "alias", "name", "type", "base_url", "models", "headers", "options", "note",
-                                  "enabled", "builtin")}
+        item = {k: p.get(k) for k in ("id", "alias", "name", "type", "base_url", "models", "headers", "options", "note",
+                                      "enabled", "builtin", "signup_url", "free")}
         item["connections"] = [connection_view(st, c) for c in st.store.provider_connections(p["id"])]
         item["latency"] = {m: round(st.health.latency(f"{p['id']}/{m}")) for m in p["models"]
                            if 0 < st.health.latency(f"{p['id']}/{m}") < 1e8}
@@ -258,7 +258,10 @@ async def quick_provider(request: Request):
             error = e.message
         except Exception as e:  # noqa: BLE001
             error = str(e)
-    return {"ok": True, "id": pid, "alias": pid, "models": models, "error": error}
+    test = None
+    if models:
+        test = await run_test(st, st.store.providers[pid], {**conn, "_secret": {"api_key": api_key}}, models[0])
+    return {"ok": True, "id": pid, "alias": pid, "models": models, "error": error, "test": test}
 
 
 @router.delete("/admin/api/providers/{pid}")
@@ -285,10 +288,28 @@ async def add_connection(pid: str, request: Request):
     if not keys:
         raise HTTPException(400, "Nhập ít nhất 1 API key (mỗi dòng 1 key để thêm nhiều)")
     label = str(data.get("label") or p["name"]).strip()
+    first = None
     for i, k in enumerate(keys):
-        st.store.add_connection(pid, label if len(keys) == 1 else f"{label} #{i + 1}", {"api_key": k},
-                                priority=int(data.get("priority") or 0))
-    return {"ok": True, "added": len(keys)}
+        c = st.store.add_connection(pid, label if len(keys) == 1 else f"{label} #{i + 1}", {"api_key": k},
+                                    priority=int(data.get("priority") or 0))
+        first = first or c
+    error = None
+    if not st.store.providers[pid]["models"]:  # provider chưa có model -> tự lấy bằng key vừa nhập
+        try:
+            models = await st.providers["openai"].list_models(st.store.providers[pid],
+                                                               {**first, "_secret": {"api_key": keys[0]}})
+            if models:
+                st.store.upsert_provider({"id": pid, "models": models})
+        except ProviderError as e:
+            error = e.message
+        except Exception as e:  # noqa: BLE001
+            error = str(e)
+    prov = st.store.providers[pid]
+    test = None
+    if prov["models"]:
+        model = (prov.get("options") or {}).get("auto_model") or prov["models"][0]
+        test = await run_test(st, prov, {**first, "_secret": {"api_key": keys[0]}}, model)
+    return {"ok": True, "added": len(keys), "models": len(prov["models"]), "error": error, "test": test}
 
 
 @router.patch("/admin/api/connections/{cid}")
@@ -336,9 +357,15 @@ async def test_connection(cid: str, request: Request):
     st = S(request)
     provider, conn = _conn_with_secret(st, cid)
     data = await request.json() if (await request.body()) else {}
-    model = data.get("model") or (provider["models"][0] if provider["models"] else "")
+    model = data.get("model") or (provider.get("options") or {}).get("auto_model") or \
+        (provider["models"][0] if provider["models"] else "")
     if not model:
         raise HTTPException(400, "Provider chưa có model nào")
+    return await run_test(st, provider, conn, model)
+
+
+async def run_test(st, provider: dict[str, Any], conn: dict[str, Any], model: str) -> dict[str, Any]:
+    cid = conn["id"]
     body = {"model": model, "messages": [{"role": "user", "content": "Reply with exactly: OK"}], "max_tokens": 16}
     ctx = CallContext(body, False, "test")
     t0 = time.monotonic()

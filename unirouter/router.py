@@ -17,6 +17,9 @@ from .health import Health
 from .providers.base import CallContext, Event, Provider, ProviderError, Target
 
 
+AUTO_MODEL = "auto"
+
+
 class GatewayError(Exception):
     def __init__(self, status: int, message: str, attempts: list[dict[str, Any]] | None = None):
         super().__init__(message)
@@ -63,9 +66,8 @@ class Router:
         name = (name or "").strip()
         store = self.store
         if not name:
-            default = store.setting("default_model")
-            if default and _depth == 0 and allow_default:
-                return self.resolve(default, 1)
+            if _depth == 0 and allow_default:
+                return self.resolve(store.setting("default_model") or AUTO_MODEL, 1)
             raise GatewayError(400, "Thiếu tham số model")
 
         combo = store.combos.get(name.lower())
@@ -79,6 +81,12 @@ class Router:
                 targets.extend(sub)
             return self._order(targets, combo["strategy"], f"combo:{combo['name']}"), combo["strategy"]
 
+        if name.lower() == AUTO_MODEL and AUTO_MODEL not in store.combos:
+            targets = self.auto_targets()
+            if not targets:
+                raise GatewayError(503, "Chưa có provider nào có API key/tài khoản. Vào /admin → Providers để thêm.")
+            return targets, "priority"
+
         if "/" in name:
             alias, model = name.split("/", 1)
             pid = store.alias_map.get(alias.lower())
@@ -90,11 +98,26 @@ class Router:
         if matches:
             return matches, "priority"
 
-        default = store.setting("default_model")
-        if _depth == 0 and allow_default and default and store.setting("unknown_model_fallback") and default.lower() != name.lower():
+        default = store.setting("default_model") or AUTO_MODEL
+        if _depth == 0 and allow_default and store.setting("unknown_model_fallback") and default.lower() != name.lower():
             return self.resolve(default, 1)
         raise GatewayError(404, f"Không tìm thấy model hoặc combo '{name}'. Dùng dạng provider/model "
                                 f"(vd: cx/gpt-5.5) hoặc tạo combo trong /admin.")
+
+    def auto_targets(self) -> list[Target]:
+        """Model "auto": mọi provider đã có tài khoản, mỗi provider 1 model ưu tiên, thử lần lượt.
+
+        Không cần tạo combo: thêm provider là dùng được ngay (giống 9router).
+        """
+        out: list[Target] = []
+        for pid, p in self.store.providers.items():
+            if not p["enabled"] or not p["models"]:
+                continue
+            if not any(c["enabled"] for c in self.store.provider_connections(pid)):
+                continue
+            model = (p.get("options") or {}).get("auto_model") or p["models"][0]
+            out.append(self._target(pid, model))
+        return out
 
     def _order(self, targets: list[Target], strategy: str, key: str) -> list[Target]:
         if len(targets) < 2:

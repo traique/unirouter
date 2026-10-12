@@ -19,6 +19,8 @@ from cryptography.fernet import Fernet, InvalidToken
 from . import config
 from .providers.catalog import PRESETS
 
+PRESET_BY_ID = {p["id"]: p for p in PRESETS}
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -183,6 +185,9 @@ class Store:
                 p["headers"] = json.loads(p["headers"])
                 p["options"] = json.loads(p["options"])
                 p["enabled"] = bool(p["enabled"])
+                preset = PRESET_BY_ID.get(p["id"], {})
+                p["signup_url"] = preset.get("signup_url", "")
+                p["free"] = bool(preset.get("free"))
                 self.providers[p["id"]] = p
                 self.alias_map[p["alias"].lower()] = p["id"]
                 self.alias_map[p["id"].lower()] = p["id"]
