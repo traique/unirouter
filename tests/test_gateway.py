@@ -624,130 +624,76 @@ def test_admin_backup_and_key_stats(env):
     assert r["ok"] and r["dims"] == 3
 
 
-# ------------------------------------------------------------------ audio
-def _set_opts(st, pid, **kw):
-    opts = dict(st.store.providers[pid]["options"])
-    for k, v in kw.items():
-        if v is None:
-            opts.pop(k, None)
-        else:
-            opts[k] = v
-    st.store.upsert_provider({"id": pid, "options": opts})
+def test_removes_old_voice_providers():
+    import json
+    import sqlite3
+    import tempfile
+    from unirouter.db import Store
+    path = tempfile.mktemp(suffix=".db")
+    Store(path)
+    con = sqlite3.connect(path)
+    con.execute("INSERT INTO providers (id,alias,name,type,base_url,models,headers,options,note,enabled,builtin,created_at)"
+                " VALUES ('edge-tts','edge','Edge','edge','https://x','[]','{}','{}','',1,1,0)")
+    con.execute("INSERT INTO connections (id,provider_id,label,secret_enc,meta,enabled,priority,created_at)"
+                " VALUES ('c1','edge-tts','x','x',?,1,0,0)", (json.dumps({}),))
+    con.commit()
+    con.close()
+    st = Store(path)
+    assert "edge-tts" not in st.providers and not st.q("SELECT 1 FROM connections WHERE provider_id='edge-tts'")
 
 
-def test_transcription_json_text_and_fallback(env):
+# ------------------------------------------------------------------ hồi quy sau review
+def test_image_bad_n_is_400_and_does_not_lock_accounts(env):
     st = env["st"]
-    _set_opts(st, "mock", stt_model="stt-fail")
-    _set_opts(st, "mock2", stt_model="whisper-x")
-    try:
-        r = oa(env).audio.transcriptions.create(model="whisper-1", file=("a.webm", b"x" * 100, "audio/webm"),
-                                                language="vi")
-        assert r.text == "xin chào thế giới"
-        sent = env["mock"].last_body["stt:whisper-x"]
-        assert sent["fields"]["language"] == "vi" and sent["filename"] == "a.webm" and sent["size"] == 100
-        r = httpx.post(env["base"] + "/v1/audio/transcriptions", headers={"Authorization": "Bearer master-test"},
-                       files={"file": ("a.mp3", b"y" * 10, "audio/mpeg")}, data={"response_format": "text"})
-        assert r.status_code == 200 and r.text == "xin chào thế giới"
-        assert r.headers["x-unirouter-target"] == "mk2/whisper-x"
-    finally:
-        _set_opts(st, "mock", stt_model=None)
-        _set_opts(st, "mock2", stt_model=None)
-        st.health.conns.clear()
+    for _ in range(4):
+        r = httpx.post(env["base"] + "/v1/images/generations", headers={"Authorization": "Bearer master-test"},
+                       json={"model": "cx/gpt-image", "prompt": "x", "n": "two"})
+        assert r.status_code == 400
+    r = httpx.post(env["base"] + "/v1/images/generations", headers={"Authorization": "Bearer master-test"},
+                   json={"prompt": "x", "size": "huge"})
+    assert r.status_code == 400
+    cx = [c for c in st.store.provider_connections("codex")][0]
+    assert st.health.available(cx["id"])
 
 
-def test_transcription_requires_file(env):
-    r = httpx.post(env["base"] + "/v1/audio/transcriptions", headers={"Authorization": "Bearer master-test"},
-                   data={"model": "auto"})
+def test_auth_checked_before_body(env):
+    r = httpx.post(env["base"] + "/v1/embeddings", json={"input": ""})
+    assert r.status_code == 401
+    r = httpx.post(env["base"] + "/v1/images/generations", json={})
+    assert r.status_code == 401
+    r = httpx.post(env["base"] + "/admin/api/login", json=[])
     assert r.status_code == 400
 
 
-def test_speech_openai_compat(env):
-    r = httpx.post(env["base"] + "/v1/audio/speech", headers={"Authorization": "Bearer master-test"},
-                   json={"model": "mk/x-tts", "input": "Xin chào", "voice": "alloy"})
-    assert r.status_code == 200 and r.content == b"ID3oai-audio" and r.headers["content-type"] == "audio/mpeg"
-
-
-def test_speech_azure_ssml_voice_and_speed(env):
+def test_combo_named_auto_not_used_for_embeddings(env):
     st = env["st"]
-    st.store.upsert_provider({"id": "azure-speech", "base_url": env["up"] + "/azure"})
-    cid = st.store.add_connection("azure-speech", "az1", {"api_key": "az-good"})["id"]
+    st.store.upsert_combo({"name": "auto", "strategy": "priority", "targets": ["mk/ok"]})
     try:
-        r = oa(env).audio.speech.create(model="tts-1", voice="alloy", input="Tôi & bạn <3", speed=1.25)
-        assert r.content == b"ID3azure-audio"
-        last = env["mock"].last_body["azure"]
-        assert "vi-VN-HoaiMyNeural" in last["ssml"] and "Tôi &amp; bạn &lt;3" in last["ssml"]
-        assert "rate='+25%'" in last["ssml"] and "xml:lang='vi-VN'" in last["ssml"]
-        assert last["headers"]["x-microsoft-outputformat"] == "audio-24khz-48kbitrate-mono-mp3"
-        r = httpx.post(env["base"] + "/v1/audio/speech", headers={"Authorization": "Bearer master-test"},
-                       json={"model": "az/vi-VN-NamMinhNeural", "input": "chào", "response_format": "wav"})
-        assert r.status_code == 200 and r.headers["content-type"] == "audio/wav"
-        assert "vi-VN-NamMinhNeural" in env["mock"].last_body["azure"]["ssml"]
-        # Azure không bị dùng cho chat auto
-        assert all(t.provider["id"] != "azure-speech" for t in st.router.auto_targets("chat"))
-        c = httpx.Client(base_url=env["base"])
-        c.post("/admin/api/login", json={"username": "admin", "password": "pw"})
-        h = {"X-Requested-With": "unirouter"}
-        r = c.post(f"/admin/api/connections/{cid}/test", json={}, headers=h).json()
-        assert r["ok"], r
-        r = c.post("/admin/api/providers/azure-speech/fetch-models", json={}, headers=h).json()
-        assert r["models"][:2] == ["vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"]
-        r = c.post("/admin/api/playground/speech", json={"model": "auto", "input": "xin chào"}, headers=h).json()
-        assert r["ok"] and r["audio"].startswith("data:audio/mpeg;base64,")
-        r = c.post("/admin/api/playground/transcribe", headers=h, data={"model": "mk/whisper-x"},
-                   files={"file": ("rec.webm", b"z" * 20, "audio/webm")}).json()
-        assert r["ok"] and r["text"] == "xin chào thế giới"
+        r = httpx.post(env["base"] + "/v1/embeddings", headers={"Authorization": "Bearer master-test"},
+                       json={"input": "hi"})
+        assert r.status_code == 503  # không có model embedding -> không gửi nhầm sang model chat
     finally:
-        st.store.delete_connection(cid)
-        st.health.conns.clear()
+        st.store.delete_combo("auto")
 
 
-def test_speech_none_configured(env):
-    r = httpx.post(env["base"] + "/v1/audio/speech", headers={"Authorization": "Bearer master-test"},
-                   json={"input": "x"})
-    assert r.status_code == 503 and "Azure" in r.json()["error"]["message"]
-
-
-def test_speech_edge_tts_no_key(env, monkeypatch):
-    import sys
-    import types
-    seen = {}
-
-    class FakeComm:
-        def __init__(self, text, voice, rate="+0%", **kw):
-            seen.update(text=text, voice=voice, rate=rate)
-
-        async def stream(self):
-            if seen["voice"] == "xx-XX-NopeNeural":
-                raise type("NoAudioReceived", (Exception,), {})("no audio")
-            yield {"type": "WordBoundary"}
-            yield {"type": "audio", "data": b"ID3edge"}
-            yield {"type": "audio", "data": b"-audio"}
-
-    async def list_voices():
-        return [{"ShortName": "en-US-AvaNeural"}, {"ShortName": "vi-VN-NamMinhNeural"},
-                {"ShortName": "vi-VN-HoaiMyNeural"}, {"ShortName": "fr-FR-VivienneMultilingualNeural"}]
-
-    monkeypatch.setitem(sys.modules, "edge_tts", types.SimpleNamespace(Communicate=FakeComm, list_voices=list_voices))
+def test_key_stats_by_id(env):
     st = env["st"]
+    a = st.store.create_key("dup", None, 0)
+    st.store.create_key("dup", None, 0)
+    oa(env, a).chat.completions.create(model="mk/ok", messages=[{"role": "user", "content": "hi"}])
     c = httpx.Client(base_url=env["base"])
     c.post("/admin/api/login", json={"username": "admin", "password": "pw"})
-    h = {"X-Requested-With": "unirouter"}
-    r = c.post("/admin/api/providers/edge-tts/connections", json={}, headers=h).json()
-    assert r["added"] == 1 and r["test"]["ok"], r
-    try:
-        r = httpx.post(env["base"] + "/v1/audio/speech", headers={"Authorization": "Bearer master-test"},
-                       json={"model": "tts-1", "input": "Xin chào", "voice": "vi-VN-NamMinhNeural", "speed": 0.8})
-        assert r.status_code == 200 and r.content == b"ID3edge-audio"
-        assert r.headers["x-unirouter-target"].startswith("edge/")
-        assert seen == {"text": "Xin chào", "voice": "vi-VN-NamMinhNeural", "rate": "-20%"}
-        r = httpx.post(env["base"] + "/v1/audio/speech", headers={"Authorization": "Bearer master-test"},
-                       json={"model": "edge/xx-XX-NopeNeural", "input": "x"})
-        assert r.status_code == 400
-        r = c.post("/admin/api/providers/edge-tts/fetch-models", json={}, headers=h).json()
-        assert r["models"] == ["vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural", "fr-FR-VivienneMultilingualNeural",
-                               "en-US-AvaNeural"]
-        assert all(t.provider["id"] != "edge-tts" for t in st.router.auto_targets("chat"))
-    finally:
-        for cn in st.store.provider_connections("edge-tts"):
-            st.store.delete_connection(cn["id"])
-        st.health.conns.clear()
+    dups = [k for k in c.get("/admin/api/keys").json()["data"] if k["name"] == "dup"]
+    assert sorted(k["usage_24h"]["n"] for k in dups) == [0, 1]
+
+
+def test_expired_image_not_served(env):
+    import os
+    import time as _t
+    from unirouter import images
+    name = images.save_b64("iVBORw0KGgo=")
+    assert images.path_of(name)
+    old = _t.time() - images.MAX_AGE - 10
+    os.utime(images.DIR / name, (old, old))
+    assert images.path_of(name) is None
+    assert httpx.get(env["base"] + f"/v1/images/files/{name}").status_code == 404

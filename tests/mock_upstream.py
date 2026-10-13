@@ -118,48 +118,6 @@ async def oai_images(request: Request):
     return {"created": 1, "data": [{"b64_json": PNG_B64}]}
 
 
-@app.post("/oai/v1/audio/transcriptions")
-async def oai_stt(request: Request):
-    form = await request.form()
-    model = form["model"]
-    calls["stt:" + model] = calls.get("stt:" + model, 0) + 1
-    f = form["file"]
-    last_body["stt:" + model] = {"fields": {k: v for k, v in form.items() if k != "file"},
-                                 "filename": f.filename, "size": len(await f.read())}
-    if model == "stt-fail":
-        return JSONResponse({"error": {"message": "whisper down"}}, 503)
-    if form.get("response_format") == "text":
-        from fastapi.responses import PlainTextResponse
-        return PlainTextResponse("xin chào thế giới")
-    return {"text": "xin chào thế giới", "language": "vi"}
-
-
-@app.post("/oai/v1/audio/speech")
-async def oai_tts(request: Request):
-    from fastapi.responses import Response
-    body = await request.json()
-    calls["tts:" + body["model"]] = calls.get("tts:" + body["model"], 0) + 1
-    if body["model"] == "tts-fail":
-        return JSONResponse({"error": {"message": "tts down"}}, 500)
-    return Response(b"ID3oai-audio", media_type="audio/mpeg")
-
-
-@app.post("/azure/cognitiveservices/v1")
-async def azure_tts(request: Request):
-    from fastapi.responses import Response
-    ssml = (await request.body()).decode()
-    last_body["azure"] = {"ssml": ssml, "headers": dict(request.headers)}
-    if request.headers.get("ocp-apim-subscription-key") != "az-good":
-        return Response(status_code=401)
-    return Response(b"ID3azure-audio", media_type="audio/mpeg")
-
-
-@app.get("/azure/cognitiveservices/voices/list")
-async def azure_voices(request: Request):
-    return [{"ShortName": "en-US-AvaNeural"}, {"ShortName": "vi-VN-NamMinhNeural"}, {"ShortName": "vi-VN-HoaiMyNeural"},
-            {"ShortName": "en-US-AndrewMultilingualNeural"}, {"ShortName": "ja-JP-NanamiNeural"}]
-
-
 @app.get("/oai/v1/models")
 async def oai_models():
     return {"data": [{"id": "m1"}, {"id": "m2"}]}
