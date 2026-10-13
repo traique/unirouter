@@ -57,3 +57,10 @@ def retry_after(headers) -> float:
         return min(float(value), 3600.0)
     except ValueError:
         return 0.0
+
+
+def via_proxy() -> bool:
+    """httpx tự dùng proxy từ biến môi trường; khi đó IP kết nối là của proxy."""
+    import os
+
+    return any(os.environ.get(k) for k in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"))

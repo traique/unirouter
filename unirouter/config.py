@@ -7,7 +7,7 @@ import os
 import secrets
 from pathlib import Path
 
-VERSION = "1.4.1"
+VERSION = "1.4.4"
 
 
 def load_dotenv(*paths: Path) -> list[str]:

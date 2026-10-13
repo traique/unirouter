@@ -146,6 +146,9 @@ class Store:
         self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.executescript(SCHEMA)
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(usage)")}
+        if "key_id" not in cols:  # nâng cấp DB cũ
+            self.conn.execute("ALTER TABLE usage ADD COLUMN key_id TEXT")
         self.crypto = Crypto(config.FERNET_KEY)
         self._seed()
         self.reload()
@@ -160,6 +163,11 @@ class Store:
             return self.conn.execute(sql, args).rowcount
 
     def _seed(self) -> None:
+        # Dọn provider giọng nói của bản 1.4.x (đã bỏ tính năng chuyển chữ <-> giọng nói)
+        old = [r["id"] for r in self.q("SELECT id FROM providers WHERE type IN ('azure','edge')")]
+        for pid in old:
+            self.x("DELETE FROM connections WHERE provider_id=?", (pid,))
+            self.x("DELETE FROM providers WHERE id=?", (pid,))
         for p in PRESETS:
             exists = self.q("SELECT 1 FROM providers WHERE id=?", (p["id"],))
             if exists:
@@ -240,8 +248,8 @@ class Store:
         if "/" in alias:
             raise ValueError("alias không được chứa dấu /")
         ptype = data.get("type") or (existing or {}).get("type") or "openai"
-        if ptype not in ("openai", "codex", "azure", "edge"):
-            raise ValueError("type phải là openai, codex, azure hoặc edge")
+        if ptype not in ("openai", "codex"):
+            raise ValueError("type phải là openai hoặc codex")
         models = data.get("models", (existing or {}).get("models", []))
         if isinstance(models, str):
             models = [m.strip() for m in models.replace("\n", ",").split(",") if m.strip()]
@@ -398,7 +406,7 @@ class Store:
         with self.lock:
             self.conn.executemany(
                 "INSERT INTO usage (ts,key_name,endpoint,requested_model,provider,model,connection,status,latency_ms,ttfb_ms,"
-                "input_tokens,output_tokens,rtk_saved,attempts,error) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+                "input_tokens,output_tokens,rtk_saved,attempts,error,key_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
 
     def prune_usage(self) -> None:
         days = int(self.setting("usage_retention_days") or 7)

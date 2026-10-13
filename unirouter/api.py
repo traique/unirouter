@@ -1,7 +1,8 @@
-"""Endpoint /v1: Chat Completions, Responses, Anthropic Messages, Embeddings, Images, Audio, Models."""
+"""Endpoint /v1: Chat Completions, Responses, Anthropic Messages, Embeddings, Images, Models."""
 from __future__ import annotations
 
 import asyncio
+import re
 import copy
 import hmac
 import time
@@ -9,7 +10,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from . import config, images, rtk
 from .formats.anthropic import AnthropicWriter, anthropic_to_chat
@@ -123,7 +124,7 @@ async def handle(request: Request, fmt: str, chat: dict[str, Any], requested: st
 
     ctx = CallContext(chat, stream, fmt, responses_body)
     t0 = time.monotonic()
-    log = {"key_name": key["name"], "endpoint": fmt, "requested_model": requested, "rtk_saved": rtk_saved}
+    log = {"key_name": key["name"], "key_id": key["id"], "endpoint": fmt, "requested_model": requested, "rtk_saved": rtk_saved}
     task = asyncio.create_task(st.router.open(ctx, requested, allow_default=not key.get("allowed_models")))
     done, _ = await asyncio.wait({task}, timeout=EARLY_WAIT if stream else None)
 
@@ -302,37 +303,19 @@ def public_base(request: Request) -> str:
     return config.PUBLIC_URL or str(request.base_url).rstrip("/")
 
 
-MAX_AUDIO_BYTES = 25 * 1024 * 1024
-MAX_SPEECH_CHARS = 10000
-
-
-async def unary(request: Request, kind: str, body: dict[str, Any]) -> Response:
+async def unary(request: Request, kind: str, body: dict[str, Any], key: dict[str, Any] | None = None) -> JSONResponse:
     st = S(request)
-    key = authenticate(request)
+    key = key or authenticate(request)
     requested = str(body.get("model") or "")
     if not st.router.allowed(key, requested or "auto"):
         return JSONResponse(error_body("chat", 403, f"API key không được phép dùng model '{requested or 'auto'}'"), 403)
-    log = {"key_name": key["name"], "endpoint": kind, "requested_model": requested or "auto", "rtk_saved": 0}
+    log = {"key_name": key["name"], "key_id": key["id"], "endpoint": kind, "requested_model": requested or "auto", "rtk_saved": 0}
     t0 = time.monotonic()
     try:
         data, target, conn, attempts, _ = await st.router.call(kind, requested, body,
                                                                allow_default=not key.get("allowed_models"))
     except Exception as e:  # noqa: BLE001
         return failure_response(st, "chat", e, log, t0)
-    ms = int((time.monotonic() - t0) * 1000)
-    done = {**log, "provider": target.provider["id"], "model": target.model, "connection": conn["label"], "status": 200,
-            "latency_ms": ms, "ttfb_ms": ms, "attempts": len(attempts) + 1}
-    hdr = {"X-UniRouter-Target": target.label}
-    if kind == "speech":
-        audio, ctype = data
-        st.usage.add(**done, input_tokens=estimate_tokens(body.get("input") or ""), output_tokens=0)
-        return Response(audio, media_type=ctype, headers=hdr)
-    if kind == "transcriptions":
-        text = data.get("_text") if "_text" in data else data.get("text")
-        st.usage.add(**done, input_tokens=0, output_tokens=estimate_tokens(text or ""))
-        if "_text" in data:
-            return PlainTextResponse(data["_text"], media_type=data.get("_ctype") or "text/plain", headers=hdr)
-        return JSONResponse(data, headers=hdr)
     usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
     inp = int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0)
     outp = int(usage.get("output_tokens") or 0)
@@ -344,8 +327,10 @@ async def unary(request: Request, kind: str, body: dict[str, Any]) -> Response:
     else:
         finish_images(request, data, body.get("response_format"))
         outp = outp or len(data.get("data") or [])
-    st.usage.add(**done, input_tokens=inp, output_tokens=outp)
-    return JSONResponse(data, headers=hdr)
+    ms = int((time.monotonic() - t0) * 1000)
+    st.usage.add(**log, provider=target.provider["id"], model=target.model, connection=conn["label"], status=200,
+                 latency_ms=ms, ttfb_ms=ms, input_tokens=inp, output_tokens=outp, attempts=len(attempts) + 1)
+    return JSONResponse(data, headers={"X-UniRouter-Target": target.label})
 
 
 def finish_images(request: Request, data: dict[str, Any], fmt: Any) -> None:
@@ -365,55 +350,31 @@ def finish_images(request: Request, data: dict[str, Any], fmt: Any) -> None:
 @router.post("/v1/embeddings")
 @router.post("/embeddings")
 async def embeddings(request: Request):
+    key = authenticate(request)
     body = await read_json(request)
     if body.get("input") in (None, "", []):
         raise HTTPException(400, "Thiếu input")
-    return await unary(request, "embeddings", body)
+    return await unary(request, "embeddings", body, key)
 
 
 @router.post("/v1/images/generations")
 @router.post("/images/generations")
 async def images_generations(request: Request):
+    key = authenticate(request)
     body = await read_json(request)
+    validate_image_body(body)
+    return await unary(request, "images", body, key)
+
+
+def validate_image_body(body: dict[str, Any]) -> None:
     if not isinstance(body.get("prompt"), str) or not body["prompt"].strip():
         raise HTTPException(400, "Thiếu prompt")
-    return await unary(request, "images", body)
-
-
-async def read_audio_form(request: Request) -> dict[str, Any]:
-    try:
-        form = await request.form()
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, f"Body phải là multipart/form-data có trường file: {e}") from e
-    upload = form.get("file")
-    if upload is None or isinstance(upload, str):
-        raise HTTPException(400, "Thiếu file âm thanh (trường 'file')")
-    raw = await upload.read()
-    if not raw:
-        raise HTTPException(400, "File âm thanh rỗng")
-    if len(raw) > MAX_AUDIO_BYTES:
-        raise HTTPException(413, "File âm thanh tối đa 25 MB")
-    body: dict[str, Any] = {k: v for k, v in form.items() if k != "file" and isinstance(v, str)}
-    body["_file"] = (upload.filename or "audio.webm", raw, upload.content_type or "application/octet-stream")
-    return body
-
-
-@router.post("/v1/audio/transcriptions")
-@router.post("/audio/transcriptions")
-async def audio_transcriptions(request: Request):
-    return await unary(request, "transcriptions", await read_audio_form(request))
-
-
-@router.post("/v1/audio/speech")
-@router.post("/audio/speech")
-async def audio_speech(request: Request):
-    body = await read_json(request)
-    text = body.get("input")
-    if not isinstance(text, str) or not text.strip():
-        raise HTTPException(400, "Thiếu input (văn bản cần đọc)")
-    if len(text) > MAX_SPEECH_CHARS:
-        raise HTTPException(400, f"input tối đa {MAX_SPEECH_CHARS} ký tự")
-    return await unary(request, "speech", body)
+    n = body.get("n", 1)
+    if n is not None and (isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= 10):
+        raise HTTPException(400, "n phải là số nguyên từ 1 đến 10")
+    size = body.get("size")
+    if size is not None and (not isinstance(size, str) or not re.fullmatch(r"auto|\d{2,5}x\d{2,5}", size)):
+        raise HTTPException(400, "size phải có dạng 1024x1024 hoặc auto")
 
 
 @router.get("/v1/images/files/{name}")
@@ -439,7 +400,7 @@ async def models(request: Request):
     for p in st.store.providers.values():
         if not p["enabled"] or not any(c["enabled"] for c in st.store.provider_connections(p["id"])):
             continue
-        extra = [m for m in (st.router.kind_model(p, k) for k in ("embeddings", "images", "transcriptions", "speech"))
+        extra = [m for m in (st.router.kind_model(p, "embeddings"), st.router.kind_model(p, "images"))
                  if m and m not in p["models"]]
         for m in [*p["models"], *extra]:
             mid = f"{p['alias']}/{m}"

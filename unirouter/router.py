@@ -4,7 +4,7 @@
 - Nhiều tài khoản cho mỗi provider, xoay vòng hoặc dùng lần lượt
 - Circuit breaker + cooldown theo Retry-After / thời điểm reset hạn mức
 - Chỉ đổi provider khi CHƯA gửi dữ liệu nào cho client
-- Embeddings, tạo ảnh, chuyển giọng nói <-> chữ dùng chung cơ chế chọn đích/fallback (Router.call)
+- Embeddings và tạo ảnh dùng chung cơ chế chọn đích/fallback (Router.call)
 """
 from __future__ import annotations
 
@@ -76,6 +76,8 @@ class Router:
                 raise GatewayError(400, "Thiếu tham số model")
 
         combo = store.combos.get(name.lower())
+        if kind != "chat" and name.lower() == AUTO_MODEL:
+            combo = None  # combo tên "auto" là cho chat; embeddings/ảnh dùng auto theo loại
         if combo and combo["enabled"]:
             targets: list[Target] = []
             for spec in combo["targets"]:
@@ -86,7 +88,7 @@ class Router:
                 targets.extend(sub)
             return self._order(targets, combo["strategy"], f"combo:{combo['name']}"), combo["strategy"]
 
-        if name.lower() == AUTO_MODEL and AUTO_MODEL not in store.combos:
+        if name.lower() == AUTO_MODEL and (kind != "chat" or AUTO_MODEL not in store.combos):
             targets = self.auto_targets(kind)
             if not targets:
                 if kind == "embeddings":
@@ -95,12 +97,6 @@ class Router:
                 if kind == "images":
                     raise GatewayError(503, "Chưa có provider nào tạo được ảnh. Đăng nhập ChatGPT hoặc đặt "
                                             "\"Model tạo ảnh\" khi sửa provider.")
-                if kind == "transcriptions":
-                    raise GatewayError(503, "Chưa có provider nào chuyển giọng nói thành chữ. Thêm key Groq "
-                                            "(Whisper miễn phí) hoặc Mistral.")
-                if kind == "speech":
-                    raise GatewayError(503, "Chưa có provider nào chuyển chữ thành giọng nói. Bật Microsoft Edge TTS "
-                                            "(không cần key) hoặc thêm key Azure Speech (gói miễn phí F0).")
                 raise GatewayError(503, "Chưa có provider nào có API key/tài khoản. Vào /admin → Providers để thêm.")
             return targets, "priority"
 
@@ -130,19 +126,14 @@ class Router:
     def kind_model(p: dict[str, Any], kind: str) -> str | None:
         """Model provider dùng khi gọi "auto" cho từng loại (chat / embeddings / images)."""
         opts = p.get("options") or {}
-        key = {"chat": "auto_model", "embeddings": "embedding_model", "images": "image_model",
-               "transcriptions": "stt_model", "speech": "tts_model"}[kind]
-        if p["type"] in ("azure", "edge") and kind != "speech":
-            return None  # provider chỉ dùng cho giọng nói
+        key = {"chat": "auto_model", "embeddings": "embedding_model", "images": "image_model"}[kind]
         if key in opts:
             return opts[key] or None  # chuỗi rỗng = tắt loại này cho provider
         found = next((m for m in p["models"] if model_kind(m) == kind), None)
         if found:
             return found
         if kind == "chat":
-            return next((m for m in p["models"] if model_kind(m) == "chat"), None)
-        if kind == "speech" and p["type"] in ("azure", "edge"):
-            return p["models"][0] if p["models"] else "vi-VN-HoaiMyNeural"
+            return p["models"][0] if p["models"] else None
         if kind == "images" and p["type"] == "codex":
             return "gpt-image"
         return None
@@ -163,8 +154,6 @@ class Router:
                 out.append(self._target(pid, model))
         if kind == "images":  # tạo ảnh qua ChatGPT là thử nghiệm -> để cuối
             out.sort(key=lambda t: t.provider["type"] == "codex")
-        if kind == "speech":  # giọng Microsoft đọc tiếng Việt tốt -> ưu tiên (Azure chính thức trước, Edge sau)
-            out.sort(key=lambda t: {"azure": 0, "edge": 1}.get(t.provider["type"], 2))
         return out
 
     def _order(self, targets: list[Target], strategy: str, key: str) -> list[Target]:
@@ -267,8 +256,8 @@ class Router:
         raise GatewayError(status, msg, attempts)
 
     async def call(self, kind: str, requested: str, body: dict[str, Any],
-                   allow_default: bool = True) -> tuple[Any, Target, dict[str, Any], list[dict[str, Any]], int]:
-        """Gọi endpoint một lần (embeddings, tạo ảnh, giọng nói) với cùng cơ chế chọn đích và fallback."""
+                   allow_default: bool = True) -> tuple[dict[str, Any], Target, dict[str, Any], list[dict[str, Any]], int]:
+        """Gọi endpoint một lần (embeddings / tạo ảnh) với cùng cơ chế chọn đích, xoay tài khoản và fallback."""
         targets, _ = self.resolve(requested, allow_default=allow_default, kind=kind)
         attempts: list[dict[str, Any]] = []
         last: ProviderError | None = None
@@ -293,7 +282,8 @@ class Router:
                 started = time.monotonic()
                 try:
                     use = {**conn, "_secret": self.store.connection_secret(cid)}
-                    data = await getattr(impl, kind)(target, use, body)
+                    fn = impl.embeddings if kind == "embeddings" else impl.images
+                    data = await fn(target, use, body)
                 except ProviderError as err:
                     self._fail(target, conn, err, started, attempts)
                     last = err
@@ -302,9 +292,10 @@ class Router:
                     if err.scope == "account":
                         continue
                     break
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:  # noqa: BLE001 - lỗi lạ (thường do dữ liệu request): không phạt tài khoản
                     err = ProviderError(502, f"{type(e).__name__}: {e}")
-                    self._fail(target, conn, err, started, attempts)
+                    attempts.append({"target": target.label, "account": conn["label"], "status": 502,
+                                     "error": err.message[:300]})
                     last = err
                     break
                 ms = int((time.monotonic() - started) * 1000)

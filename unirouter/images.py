@@ -66,7 +66,12 @@ def path_of(name: str) -> Path | None:
     if not NAME_RE.match(name):
         return None
     p = DIR / name
-    return p if p.is_file() else None
+    try:
+        if not p.is_file() or time.time() - p.stat().st_mtime > MAX_AGE:
+            return None
+    except OSError:
+        return None
+    return p
 
 
 def media_type(name: str) -> str:

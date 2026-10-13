@@ -6,6 +6,7 @@ import contextlib
 import time
 from typing import Any
 
+from . import images
 from .db import Store, now_ms
 
 
@@ -23,7 +24,7 @@ class UsageLog:
             now_ms(), row.get("key_name"), row.get("endpoint"), row.get("requested_model"), row.get("provider"),
             row.get("model"), row.get("connection"), row.get("status"), row.get("latency_ms"), row.get("ttfb_ms"),
             row.get("input_tokens"), row.get("output_tokens"), row.get("rtk_saved"), row.get("attempts"),
-            (row.get("error") or None) and str(row["error"])[:500],
+            (row.get("error") or None) and str(row["error"])[:500], row.get("key_id"),
         ))
         if len(self.queue) > 500:
             self.flush()
@@ -45,6 +46,8 @@ class UsageLog:
             if tick % 1200 == 1:  # ~1 giờ
                 with contextlib.suppress(Exception):
                     self.store.prune_usage()
+                with contextlib.suppress(Exception):
+                    images.cleanup()
 
     def start(self) -> None:
         self.task = asyncio.create_task(self.run())
