@@ -275,61 +275,6 @@ class OpenAICompatProvider(Provider):
             raise ProviderError(502, f"{target.provider['name']} không trả về ảnh")
         return data
 
-    async def transcriptions(self, target: Target, connection: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
-        """body: các field form + "_file": (tên file, bytes, content-type). Trả về JSON hoặc {"_text", "_ctype"}."""
-        provider = target.provider
-        url = provider["base_url"].rstrip("/") + "/audio/transcriptions"
-        h = headers_for(provider, connection["_secret"])
-        h.pop("Content-Type", None)
-        h["Accept"] = "application/json, text/plain, */*"
-        fields = {k: str(v) for k, v in body.items() if not k.startswith("_") and v not in (None, "")}
-        fields["model"] = target.model
-        try:
-            resp = await http.client().post(url, data=fields, files={"file": body["_file"]}, headers=h, timeout=300)
-        except httpx.TimeoutException as e:
-            raise ProviderError(504, f"Timeout khi gọi {provider['name']}: {e}") from e
-        except httpx.HTTPError as e:
-            raise ProviderError(502, f"Lỗi mạng tới {provider['name']}: {e}") from e
-        if resp.status_code >= 400:
-            msg = http.error_message(resp.content, resp.status_code)
-            if resp.status_code == 404:
-                raise ProviderError(404, f"{provider['name']} không hỗ trợ chuyển giọng nói thành chữ "
-                                         f"hoặc không có model '{target.model}': {msg}", "target")
-            raise classify_http(resp.status_code, msg, http.retry_after(resp.headers))
-        ctype = resp.headers.get("content-type", "")
-        if "json" in ctype:
-            try:
-                data = resp.json()
-            except ValueError as e:
-                raise ProviderError(502, f"{provider['name']} trả về JSON lỗi") from e
-            if isinstance(data, dict):
-                return data
-        return {"_text": resp.text, "_ctype": ctype.split(";")[0] or "text/plain"}
-
-    async def speech(self, target: Target, connection: dict[str, Any], body: dict[str, Any]) -> tuple[bytes, str]:
-        provider = target.provider
-        url = provider["base_url"].rstrip("/") + "/audio/speech"
-        payload = {k: v for k, v in body.items() if not k.startswith("_")}
-        payload["model"] = target.model
-        h = headers_for(provider, connection["_secret"])
-        h["Accept"] = "audio/*, application/octet-stream"
-        try:
-            resp = await http.client().post(url, json=payload, headers=h, timeout=300)
-        except httpx.TimeoutException as e:
-            raise ProviderError(504, f"Timeout khi gọi {provider['name']}: {e}") from e
-        except httpx.HTTPError as e:
-            raise ProviderError(502, f"Lỗi mạng tới {provider['name']}: {e}") from e
-        if resp.status_code >= 400:
-            msg = http.error_message(resp.content, resp.status_code)
-            if resp.status_code == 404:
-                raise ProviderError(404, f"{provider['name']} không hỗ trợ chuyển chữ thành giọng nói "
-                                         f"hoặc không có model '{target.model}': {msg}", "target")
-            raise classify_http(resp.status_code, msg, http.retry_after(resp.headers))
-        ctype = resp.headers.get("content-type", "audio/mpeg").split(";")[0]
-        if "json" in ctype or not resp.content:
-            raise ProviderError(502, f"{provider['name']} không trả về âm thanh")
-        return resp.content, ctype
-
     async def list_models(self, provider: dict[str, Any], connection: dict[str, Any]) -> list[str]:
         url = (provider.get("options") or {}).get("models_url") or provider["base_url"].rstrip("/") + "/models"
         h = headers_for(provider, connection["_secret"])

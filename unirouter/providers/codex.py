@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import ipaddress
 import json
 import time
 from collections.abc import AsyncIterator
@@ -149,7 +150,6 @@ def finalize_payload(provider: dict[str, Any], payload: dict[str, Any], requeste
 
 async def is_public_url(url: str) -> bool:
     """Chống SSRF: chỉ tải ảnh từ địa chỉ IP công khai."""
-    import ipaddress
     import socket
     from urllib.parse import urlsplit
 
@@ -185,10 +185,21 @@ async def inline_remote_images(payload: dict[str, Any]) -> None:
             url = block["image_url"]
             if not await is_public_url(url):
                 return
-            resp = await http.client().get(url, timeout=15, follow_redirects=False)
-            ctype = resp.headers.get("content-type", "").split(";")[0].strip().lower()
-            if resp.status_code < 300 and ctype.startswith("image/") and len(resp.content) <= 10 * 1024 * 1024:
-                block["image_url"] = f"data:{ctype};base64,{base64.b64encode(resp.content).decode()}"
+            async with http.client().stream("GET", url, timeout=15, follow_redirects=False) as resp:
+                # Chống DNS rebinding: kiểm tra lại IP thực sự đã kết nối (không tin lần phân giải trước)
+                stream = resp.extensions.get("network_stream")
+                peer = stream.get_extra_info("server_addr") if stream is not None else None
+                if peer and not ipaddress.ip_address(peer[0]).is_global and not http.via_proxy():
+                    return
+                ctype = resp.headers.get("content-type", "").split(";")[0].strip().lower()
+                if resp.status_code >= 300 or not ctype.startswith("image/"):
+                    return
+                data = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    data.extend(chunk)
+                    if len(data) > 10 * 1024 * 1024:
+                        return
+            block["image_url"] = f"data:{ctype};base64,{base64.b64encode(bytes(data)).decode()}"
         except Exception:
             pass
 
@@ -445,7 +456,10 @@ class CodexProvider(Provider):
         if body.get("background") in ("transparent", "opaque", "auto"):
             tool["background"] = body["background"]
         prompt = str(body.get("prompt") or "")
-        n = max(1, min(int(body.get("n") or 1), 4))
+        try:
+            n = max(1, min(int(body.get("n") or 1), 4))
+        except (TypeError, ValueError):
+            raise ProviderError(400, "n phải là số nguyên", "request") from None
         images: list[dict[str, Any]] = []
         usage = {"input": 0, "output": 0}
 

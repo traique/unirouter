@@ -31,7 +31,6 @@ PRESETS: list[dict[str, Any]] = [
         "id": "groq", "signup_url": "https://console.groq.com/keys", "free": True, "alias": "groq", "name": "Groq", "type": "openai",
         "base_url": "https://api.groq.com/openai/v1",
         "models": ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile", "qwen/qwen3-32b"],
-        "options": {"stt_model": "whisper-large-v3-turbo"},
         "note": "Key miễn phí tại console.groq.com",
     },
     {
@@ -62,7 +61,7 @@ PRESETS: list[dict[str, Any]] = [
         "id": "mistral", "signup_url": "https://console.mistral.ai/api-keys", "free": True, "alias": "ms", "name": "Mistral", "type": "openai",
         "base_url": "https://api.mistral.ai/v1",
         "models": ["mistral-large-latest", "mistral-medium-latest", "codestral-latest"],
-        "options": {"stream_usage": False, "embedding_model": "mistral-embed", "stt_model": "voxtral-mini-latest"},
+        "options": {"stream_usage": False, "embedding_model": "mistral-embed"},
     },
     {
         "id": "deepseek", "signup_url": "https://platform.deepseek.com/api_keys", "alias": "ds", "name": "DeepSeek", "type": "openai",
@@ -83,21 +82,5 @@ PRESETS: list[dict[str, Any]] = [
                     "embedding_model": "openai/text-embedding-3-small"},
         "signup_url": "https://github.com/settings/personal-access-tokens/new", "free": True,
         "note": "Miễn phí với tài khoản GitHub (có giới hạn theo ngày). Tạo token có quyền \"Models: read\" rồi dán vào.",
-    },
-    {
-        "id": "azure-speech", "alias": "az", "name": "Microsoft Azure Speech", "type": "azure",
-        "base_url": "https://southeastasia.tts.speech.microsoft.com",
-        "models": ["vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"],
-        "options": {"region": "southeastasia"},
-        "signup_url": "https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices", "free": True,
-        "note": "Giọng đọc Neural của Microsoft, có tiếng Việt (HoaiMy giọng nữ, NamMinh giọng nam). Tạo tài nguyên "
-                "Speech gói F0 miễn phí (khoảng 500.000 ký tự/tháng), dán Key 1 và chọn đúng Region.",
-    },
-    {
-        "id": "edge-tts", "alias": "edge", "name": "Microsoft Edge TTS", "type": "edge",
-        "base_url": "https://speech.platform.bing.com", "models": ["vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"],
-        "free": True,
-        "note": "Giọng đọc của tính năng Đọc to trên Edge, không cần key (thư viện edge-tts). Không phải API chính "
-                "thức: Microsoft có thể chặn bất cứ lúc nào, nên bật kèm Azure Speech để dự phòng.",
     },
 ]
