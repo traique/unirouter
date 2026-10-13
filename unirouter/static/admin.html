@@ -214,14 +214,6 @@ details summary{cursor:pointer;color:var(--muted);font-weight:500;margin-bottom:
 details summary:hover{color:var(--text)}
 .reply{white-space:pre-wrap;line-height:1.7;font-size:14px}
 .gen{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}.gen img{width:100%;border-radius:8px;border:1px solid var(--line);display:block;background:var(--panel2)}
-.drop{border:1.5px dashed var(--line2);border-radius:10px;padding:14px;background:var(--panel2)}
-.drop.over{border-color:var(--accent-hi);background:var(--accent-weak)}
-.flabel{display:block;font-size:12.5px;color:var(--text2);font-weight:500;margin-bottom:6px}
-.recdot{width:9px;height:9px;border-radius:50%;background:var(--bad);display:inline-block}
-.btn.rec{border-color:var(--bad);color:var(--bad)}.btn.rec .recdot{animation:blink 1s infinite}
-@keyframes blink{50%{opacity:.25}}
-.seg{max-width:100%;overflow-x:auto;scrollbar-width:none}.seg button{white-space:nowrap}
-audio{height:40px}
 .vec{font-family:var(--mono);font-size:12px;color:var(--text2);word-break:break-all}
 
 /* login */
@@ -284,7 +276,6 @@ audio{height:40px}
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
   <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M3 13h5l1 3h6l1-3h5"/></symbol>
   <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></symbol>
-  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></symbol>
   <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
@@ -376,23 +367,14 @@ audio{height:40px}
     <!-- PLAYGROUND -->
     <section id="tab-playground" class="hide">
       <div class="pagehead"><div><h1>Thử nghiệm</h1><p class="sub">Gửi thử qua router để kiểm tra định tuyến và phản hồi.</p></div>
-        <div class="seg" id="pgMode"><button data-m="chat" class="on">Chat</button><button data-m="image">Tạo ảnh</button><button data-m="embed">Embedding</button><button data-m="tts">Chữ → giọng</button><button data-m="stt">Giọng → chữ</button></div></div>
+        <div class="seg" id="pgMode"><button data-m="chat" class="on">Chat</button><button data-m="image">Tạo ảnh</button><button data-m="embed">Embedding</button></div></div>
       <div class="card"><div class="card-b">
         <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
           <label class="f"><span>Model hoặc combo</span><input type="text" id="pgModel" list="modelOptions" value="auto" placeholder="auto, cx/gpt-5.5, tên combo…"></label>
           <label class="f pg-chat"><span>System prompt <span class="muted" style="font-weight:400">· tùy chọn</span></span><input type="text" id="pgSystem" placeholder="Bạn là trợ lý…"></label>
-          <label class="f pg-tts hide"><span>Giọng đọc</span><input type="text" id="pgVoice" list="voiceOptions" placeholder="mặc định của provider, vd vi-VN-NamMinhNeural"></label>
-          <label class="f pg-tts hide"><span>Tốc độ</span><select id="pgSpeed"><option value="0.8">Chậm (0.8×)</option><option value="1" selected>Bình thường</option><option value="1.2">Nhanh (1.2×)</option><option value="1.5">Rất nhanh (1.5×)</option></select></label>
-          <label class="f pg-stt hide"><span>Ngôn ngữ</span><select id="pgLang"><option value="">Tự nhận diện</option><option value="vi" selected>Tiếng Việt</option><option value="en">Tiếng Anh</option></select></label>
           <label class="f pg-image hide"><span>Kích thước</span><select id="pgSize"><option value="">Mặc định</option><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option></select></label>
         </div>
-        <div class="f pg-stt hide"><span class="flabel">File âm thanh</span>
-          <div class="drop" id="pgDrop"><div class="row" style="gap:10px">
-            <button class="btn" id="pgRec" type="button"><span class="recdot"></span><span>Ghi âm</span></button>
-            <label class="btn" style="cursor:pointer"><svg class="i"><use href="#i-up"/></svg>Chọn file<input type="file" id="pgFile" accept="audio/*,video/webm,video/mp4" hidden></label>
-            <span class="muted" id="pgFileName" style="font-size:12.5px">mp3, wav, m4a, webm, ogg… tối đa 25 MB</span></div>
-            <audio id="pgPreview" controls class="hide" style="width:100%;margin-top:12px"></audio></div></div>
-        <label class="f pg-text" id="pgMsgWrap"><span id="pgMsgLbl">Tin nhắn</span><textarea id="pgMsg" style="font-family:var(--sans);font-size:14px;min-height:96px">Xin chào! Bạn là model nào?</textarea></label>
+        <label class="f"><span id="pgMsgLbl">Tin nhắn</span><textarea id="pgMsg" style="font-family:var(--sans);font-size:14px;min-height:96px">Xin chào! Bạn là model nào?</textarea></label>
         <div class="row between"><span class="muted" style="font-size:12px">Ctrl + Enter để gửi</span><button class="btn primary" id="pgSend"><svg class="i"><use href="#i-send"/></svg>Gửi</button></div>
       </div></div>
       <div class="card hide" id="pgOut"></div>
@@ -423,7 +405,7 @@ audio{height:40px}
     </section>
   </div></main>
 </div>
-<datalist id="modelOptions"></datalist><datalist id="voiceOptions"></datalist>
+<datalist id="modelOptions"></datalist>
 <div id="toast"></div>
 <div id="tip" class="hide"></div>
 <div id="modalRoot"></div>
@@ -594,9 +576,8 @@ function provStatus(p) {
   return p.connections.some(c => c.health === "cooldown") ? pill("cooldown", "Tạm khóa") : pill("error", "Lỗi");
 }
 const avatar = p => `<div class="pav ${p.connections && p.connections.length ? "on" : ""}">${esc(initials(p.name))}</div>`;
-const typeBadge = p => `<span class="badge">${p.type === "codex" ? "OAuth" : p.type === "azure" ? "Giọng nói" : p.type === "edge" ? "Giọng nói · không cần key" : "API key"}</span>${p.free ? `<span class="badge free">Miễn phí</span>` : ""}`;
+const typeBadge = p => `<span class="badge">${p.type === "codex" ? "OAuth" : "API key"}</span>${p.free ? `<span class="badge free">Miễn phí</span>` : ""}`;
 function addButtons(p, primary = true) {
-  if (p.type === "edge") return p.connections.length ? "" : `<button class="btn sm ${primary ? "primary" : ""}" onclick="enableEdge('${p.id}')">${icon("check")}Bật</button>`;
   return p.type === "codex"
     ? `<button class="btn sm ${primary ? "primary" : ""}" onclick="codexLogin('${p.id}')">Đăng nhập ChatGPT</button><button class="btn sm" onclick="codexImport('${p.id}')">Nhập auth.json</button>`
     : `<button class="btn sm ${primary ? "primary" : ""}" onclick="addKey('${p.id}')">${icon("plus")}Thêm key</button>`;
@@ -629,8 +610,7 @@ function providerBlock(p) {
       ${p.note ? `<div class="prov-note">${esc(p.note)}</div>` : ""}</div>
     <div class="row acts">${addButtons(p, false)}<button class="btn sm" onclick="editProvider('${p.id}')">Sửa</button>
       <button class="btn sm ghost" onclick="toggleProvider('${p.id}', ${!p.enabled})">${p.enabled ? "Tắt" : "Bật"}</button></div></div>
-    <div class="chips" style="margin:12px 0 0 50px">${["azure", "edge"].includes(p.type) ? "" : modelChips(p)}${[["embeddings", "embed"], ["images", "ảnh"], ["transcriptions", "giọng→chữ"], ["speech", ["azure", "edge"].includes(p.type) ? "giọng" : "chữ→giọng"]].map(([k, l]) =>
-      p.kinds?.[k] ? `<span class="chip" title="Dùng cho ${l}" style="border-style:dashed">${l} · ${esc(p.kinds[k])}</span>` : "").join("")}</div>
+    <div class="chips" style="margin:12px 0 0 50px">${modelChips(p)}${p.kinds?.embeddings ? `<span class="chip" title="Model embedding" style="border-style:dashed">embed · ${esc(p.kinds.embeddings)}</span>` : ""}${p.kinds?.images ? `<span class="chip" title="Model tạo ảnh" style="border-style:dashed">ảnh · ${esc(p.kinds.images)}</span>` : ""}</div>
     <div class="conns" style="margin-left:50px">${conns}</div></div>`;
 }
 
@@ -663,28 +643,19 @@ window.quota = run(async id => {
     <div class="row end"><button class="btn" onclick="closeModal()">Đóng</button></div>`);
 });
 
-window.enableEdge = run(async pid => {
-  toast("Đang bật và đọc thử…");
-  const r = await api(`/admin/api/providers/${pid}/connections`, { body: { label: "Edge TTS" } });
-  if (r.test && r.test.ok) toast(`Đã bật Edge TTS, đọc thử thành công (${r.test.ms} ms)`);
-  else toast(`Đã bật nhưng đọc thử lỗi: ${r.test ? r.test.error : "không rõ"}`, true);
-  loadProviders();
-});
 window.addKey = pid => {
   const p = providers.find(x => x.id === pid);
   modal(`<div class="row" style="gap:12px;margin-bottom:14px;flex-wrap:nowrap">${avatar(p)}<div><h2 style="margin:0">Thêm key ${esc(p.name)}</h2>
       ${p.signup_url ? `<a href="${esc(p.signup_url)}" target="_blank" rel="noopener" style="font-size:13px">Chưa có key? Lấy key${p.free ? " miễn phí" : ""} tại đây ↗</a>` : ""}</div></div>
     ${p.note ? `<div class="alert info">${esc(p.note)}</div>` : ""}
-    ${p.type === "azure" ? `<label class="f"><span>Region</span><select id="mkRegion">${["southeastasia", "eastasia", "japaneast", "koreacentral", "australiaeast", "centralindia", "eastus", "eastus2", "westus2", "westeurope", "northeurope", "uksouth", "francecentral"].map(r =>
-      `<option ${((p.options || {}).region || "southeastasia") === r ? "selected" : ""}>${r}</option>`).join("")}</select><div class="hint">Trùng với "Location/Region" của tài nguyên Speech trên Azure (Việt Nam nên chọn southeastasia).</div></label>` : ""}
-    <label class="f"><span>${p.type === "azure" ? "Key (Key 1 hoặc Key 2)" : "API key"}</span><textarea id="mkKey" placeholder="${p.type === "azure" ? "dán key của tài nguyên Speech" : "sk-..."}" autocomplete="off"></textarea><div class="hint">Mỗi dòng một key. Thêm nhiều key để tự xoay vòng khi hết hạn mức.</div></label>
+    <label class="f"><span>API key</span><textarea id="mkKey" placeholder="sk-..." autocomplete="off"></textarea><div class="hint">Mỗi dòng một key. Thêm nhiều key để tự xoay vòng khi hết hạn mức.</div></label>
     <label class="f"><span>Tên gợi nhớ</span><input type="text" id="mkLabel" value="${esc(p.name)}"></label>
     <div class="row end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="mkSave">Lưu và gọi thử</button></div>`,
     m => { const b = m.querySelector("#mkSave"); m.querySelector("#mkKey").focus();
       b.onclick = run(async () => {
         b.disabled = true; b.textContent = "Đang kiểm tra…";
         try {
-          const r = await api(`/admin/api/providers/${pid}/connections`, { body: { label: $("#mkLabel").value, api_key: $("#mkKey").value, region: $("#mkRegion")?.value } });
+          const r = await api(`/admin/api/providers/${pid}/connections`, { body: { label: $("#mkLabel").value, api_key: $("#mkKey").value } });
           closeModal();
           if (r.test && r.test.ok) toast(`Đã thêm ${r.added} key, gọi thử thành công (${r.test.ms} ms)`);
           else if (r.test) toast(`Đã thêm key nhưng gọi thử lỗi: ${r.test.error}`, true);
@@ -733,11 +704,9 @@ function providerForm(p) {
     <label class="f"><span>Model dùng khi gọi "auto"</span><select id="pfAuto">${p.models.map(m => `<option ${((p.options || {}).auto_model || p.models[0]) === m ? "selected" : ""}>${esc(m)}</option>`).join("")}</select></label>
     <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px">
       ${p.type === "openai" ? `<label class="f"><span>Model embedding</span><input type="text" id="pfEmb" value="${esc((p.options || {}).embedding_model ?? "")}" placeholder="${esc(p.kinds?.embeddings || "tự nhận diện")}"></label>` : "<span></span>"}
-      ${!["azure", "edge"].includes(p.type) ? `<label class="f"><span>Model tạo ảnh${p.type === "codex" ? " (thử nghiệm)" : ""}</span><input type="text" id="pfImg" value="${esc((p.options || {}).image_model ?? "")}" placeholder="${esc(p.kinds?.images || "tự nhận diện")}"></label>` : ""}
-      ${p.type === "openai" ? `<label class="f"><span>Model giọng → chữ</span><input type="text" id="pfStt" value="${esc((p.options || {}).stt_model ?? "")}" placeholder="${esc(p.kinds?.transcriptions || "tự nhận diện")}"></label>` : ""}
-      ${p.type !== "codex" ? `<label class="f"><span>${["azure", "edge"].includes(p.type) ? "Giọng đọc mặc định" : "Model chữ → giọng"}</span><input type="text" id="pfTts" value="${esc((p.options || {}).tts_model ?? "")}" placeholder="${esc(p.kinds?.speech || "tự nhận diện")}"></label>` : ""}
+      <label class="f"><span>Model tạo ảnh${p.type === "codex" ? " (thử nghiệm)" : ""}</span><input type="text" id="pfImg" value="${esc((p.options || {}).image_model ?? "")}" placeholder="${esc(p.kinds?.images || "tự nhận diện")}"></label>
     </div>
-    <div class="hint" style="margin:-8px 0 14px">Dùng khi gọi embeddings, tạo ảnh, giọng nói với model "auto". Để trống thì app tự nhận diện từ danh sách model.</div>
+    <div class="hint" style="margin:-8px 0 14px">Dùng khi gọi <span class="mono">/v1/embeddings</span> và <span class="mono">/v1/images/generations</span> với model "auto". Để trống thì app tự nhận diện từ danh sách model.</div>
     ${p.type === "openai" ? `<label class="f"><span>Tiền tố model</span><input type="text" id="pfAlias" value="${esc(p.alias)}"><div class="hint">Client gọi bằng tiền_tố/model, vd ${esc(p.alias)}/${esc(p.models[0] || "model")}</div></label>
     <label class="f"><span>Khi có nhiều API key</span><select id="pfStrategy">
       <option value="round_robin" ${(p.options || {}).account_strategy !== "fill_first" ? "selected" : ""}>Xoay vòng đều giữa các key</option>
@@ -752,7 +721,7 @@ function providerForm(p) {
       const opts = { ...(p.options || {}) };
       if ($("#pfStrategy")) opts.account_strategy = $("#pfStrategy").value;
       if ($("#pfAuto") && $("#pfAuto").value) opts.auto_model = $("#pfAuto").value;
-      for (const [id, k] of [["#pfEmb", "embedding_model"], ["#pfImg", "image_model"], ["#pfStt", "stt_model"], ["#pfTts", "tts_model"]]) {
+      for (const [id, k] of [["#pfEmb", "embedding_model"], ["#pfImg", "image_model"]]) {
         const el = $(id); if (!el) continue;
         if (el.value.trim()) opts[k] = el.value.trim(); else delete opts[k];
       }
@@ -901,40 +870,12 @@ window.delKey = run(async id => { if (!confirm("Xóa key này? Client đang dùn
 $("#pgMsg").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#pgSend").click(); });
 let pgMode = "chat";
 const PG = { chat: ["Tin nhắn", "Xin chào! Bạn là model nào?", "Gửi"], image: ["Mô tả ảnh", "Một ly trà đào cam sả trên bàn gỗ, nắng sớm, ảnh chụp sản phẩm", "Tạo ảnh"],
-  embed: ["Văn bản", "UniRouter là cổng AI tự host.", "Tạo vector"],
-  tts: ["Văn bản cần đọc", "Xin chào, mình là trợ lý của bạn. Hôm nay bạn cần giúp gì?", "Đọc"],
-  stt: ["", "", "Chuyển thành chữ"] };
-let pgAudio = null, rec = null;
-function setAudio(blob, name) {
-  pgAudio = blob ? { blob, name } : null;
-  $("#pgFileName").textContent = blob ? `${name} · ${(blob.size / 1024).toFixed(0)} KB` : "mp3, wav, m4a, webm, ogg… tối đa 25 MB";
-  const a = $("#pgPreview"); if (a._url) URL.revokeObjectURL(a._url);
-  if (blob) { a._url = URL.createObjectURL(blob); a.src = a._url; a.classList.remove("hide"); } else a.classList.add("hide");
-}
-$("#pgFile").addEventListener("change", e => { const f = e.target.files[0]; if (f) setAudio(f, f.name); });
-const drop = $("#pgDrop");
-drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
-drop.addEventListener("dragleave", () => drop.classList.remove("over"));
-drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) setAudio(f, f.name); });
-$("#pgRec").addEventListener("click", run(async () => {
-  const b = $("#pgRec");
-  if (rec) { rec.stop(); return; }
-  if (!navigator.mediaDevices?.getUserMedia) throw new Error("Trình duyệt chặn micro: ghi âm cần HTTPS. Hãy chọn file âm thanh.");
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const chunks = [];
-  rec = new MediaRecorder(stream);
-  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
-  rec.onstop = () => { stream.getTracks().forEach(t => t.stop()); const type = rec.mimeType || "audio/webm";
-    setAudio(new Blob(chunks, { type }), "ghi-am." + (type.includes("ogg") ? "ogg" : type.includes("mp4") ? "m4a" : "webm"));
-    rec = null; b.classList.remove("rec"); b.lastChild.textContent = "Ghi âm"; };
-  rec.start(); b.classList.add("rec"); b.lastChild.textContent = "Dừng ghi";
-}));
+  embed: ["Văn bản", "UniRouter là cổng AI tự host.", "Tạo vector"] };
 document.querySelectorAll("#pgMode button").forEach(b => b.addEventListener("click", () => {
   const prev = pgMode; pgMode = b.dataset.m;
   document.querySelectorAll("#pgMode button").forEach(x => x.classList.toggle("on", x === b));
-  for (const m of ["chat", "image", "tts", "stt"]) document.querySelectorAll(".pg-" + m).forEach(e => e.classList.toggle("hide", pgMode !== m));
-  $("#pgMsgWrap").classList.toggle("hide", pgMode === "stt");
-  if (pgMode === "tts") loadVoices();
+  document.querySelectorAll(".pg-chat").forEach(e => e.classList.toggle("hide", pgMode !== "chat"));
+  document.querySelectorAll(".pg-image").forEach(e => e.classList.toggle("hide", pgMode !== "image"));
   $("#pgMsgLbl").textContent = PG[pgMode][0];
   if (!$("#pgMsg").value.trim() || $("#pgMsg").value === PG[prev][1]) $("#pgMsg").value = PG[pgMode][1];
   $("#pgSend").lastChild.textContent = PG[pgMode][2]; $("#pgOut").classList.add("hide");
@@ -945,36 +886,16 @@ const okHead = (r, extra) => `<div class="card-h"><div class="row">${pill("ok", 
   <div class="row muted" style="font-size:12px;gap:14px">${extra}</div></div>`;
 const errBox = r => `<div class="card-h"><div class="row">${pill("error", "Lỗi " + (r.status || ""))}</div></div><div class="card-b"><div class="bad">${esc(r.error)}</div>${triesOf(r)}</div>`;
 $("#pgSend").onclick = run(async () => {
-  if (rec) rec.stop();
-  const b = $("#pgSend"); b.disabled = true; b.lastChild.textContent = pgMode === "image" ? "Đang tạo ảnh…" : pgMode === "stt" ? "Đang nghe…" : "Đang gửi…";
+  const b = $("#pgSend"); b.disabled = true; b.lastChild.textContent = pgMode === "image" ? "Đang tạo ảnh…" : "Đang gửi…";
   const out = $("#pgOut"); out.classList.remove("hide");
   out.innerHTML = `<div class="card-b muted">${pgMode === "image" ? "Đang tạo ảnh, có thể mất 10–60 giây…" : "Đang chờ phản hồi…"}</div>`;
   try {
     if (pgMode === "image") {
       const r = await api("/admin/api/playground/image", { body: { model: $("#pgModel").value, prompt: $("#pgMsg").value, size: $("#pgSize").value } });
-      out.innerHTML = r.ok ? okHead(r, `<span>${fmt(r.total_ms)} ms</span>`) + `<div class="card-b"><div class="gen">${r.images.map(i =>
+      const safe = u => /^(https?:\/\/|\/)/i.test(u || "") ? u : "";
+      out.innerHTML = r.ok ? okHead(r, `<span>${fmt(r.total_ms)} ms</span>`) + `<div class="card-b"><div class="gen">${r.images.filter(i => safe(i.url)).map(i =>
         `<a href="${esc(i.url)}" target="_blank" rel="noopener"><img src="${esc(i.url)}" alt="${esc(i.revised_prompt || "")}"></a>`).join("")}</div>
         ${r.images[0]?.revised_prompt ? `<p class="hint">${esc(r.images[0].revised_prompt)}</p>` : ""}${triesOf(r)}</div>` : errBox(r);
-      return;
-    }
-    if (pgMode === "tts") {
-      const r = await api("/admin/api/playground/speech", { body: { model: $("#pgModel").value, input: $("#pgMsg").value, voice: $("#pgVoice").value, speed: +$("#pgSpeed").value } });
-      out.innerHTML = r.ok ? okHead(r, `<span>${(r.size / 1024).toFixed(0)} KB</span><span>${fmt(r.total_ms)} ms</span>`) +
-        `<div class="card-b"><audio controls autoplay src="${r.audio}" style="width:100%"></audio>
-         <div class="row" style="margin-top:10px"><a class="btn sm" href="${r.audio}" download="giong-noi.mp3"><svg class="i"><use href="#i-down"/></svg>Tải MP3</a></div>${triesOf(r)}</div>` : errBox(r);
-      return;
-    }
-    if (pgMode === "stt") {
-      if (!pgAudio) throw new Error("Chọn file âm thanh hoặc ghi âm trước");
-      const fd = new FormData();
-      fd.append("file", pgAudio.blob, pgAudio.name); fd.append("model", $("#pgModel").value);
-      if ($("#pgLang").value) fd.append("language", $("#pgLang").value);
-      const resp = await fetch("/admin/api/playground/transcribe", { method: "POST", body: fd, headers: { "X-Requested-With": "unirouter" } });
-      const r = await resp.json().catch(() => ({ ok: false, error: "HTTP " + resp.status }));
-      if (!resp.ok && r.detail) throw new Error(r.detail);
-      out.innerHTML = r.ok ? okHead(r, `${r.language ? `<span>${esc(r.language)}</span>` : ""}<span>${fmt(r.total_ms)} ms</span>`) +
-        `<div class="card-b"><div class="reply">${esc(r.text) || '<span class="muted">(không nghe thấy lời nói)</span>'}</div>
-         <div class="row" style="margin-top:12px"><button class="btn sm" onclick="copyText(this.closest('.card-b').querySelector('.reply').textContent)"><svg class="i"><use href="#i-copy"/></svg>Copy</button></div>${triesOf(r)}</div>` : errBox(r);
       return;
     }
     if (pgMode === "embed") {
@@ -995,12 +916,6 @@ $("#pgSend").onclick = run(async () => {
       : `<div class="card-h"><div class="row">${pill("error", "Lỗi " + (r.status || ""))}</div></div><div class="card-b"><div class="bad">${esc(r.error)}</div>${triesHtml}</div>`;
   } finally { b.disabled = false; b.lastChild.textContent = PG[pgMode][2]; }
 });
-
-async function loadVoices() {
-  try { if (!providers.length) providers = (await api("/admin/api/providers")).data; } catch (e) { return; }
-  const v = [...new Set(providers.filter(p => ["azure", "edge"].includes(p.type) && p.enabled).flatMap(p => p.models))];
-  $("#voiceOptions").innerHTML = v.map(x => `<option value="${esc(x)}">`).join("");
-}
 
 // ---------------------------------------------------------------- snippets
 function snippets(key) {
@@ -1023,11 +938,6 @@ wire_api = "responses"`)
   + block("Tạo ảnh", "POST /v1/images/generations", `curl ${esc(base)}/v1/images/generations -H "Authorization: Bearer ${k}" \\
   -H "Content-Type: application/json" -d '{"model":"auto","prompt":"một chú mèo cam","size":"1024x1024"}'
 # trả về data[0].url (link tạm 24 giờ) và data[0].b64_json`)
-  + block("Chữ → giọng nói", "POST /v1/audio/speech", `curl ${esc(base)}/v1/audio/speech -H "Authorization: Bearer ${k}" \\
-  -H "Content-Type: application/json" -o giong-noi.mp3 \\
-  -d '{"model":"auto","input":"Xin chào","voice":"vi-VN-HoaiMyNeural"}'`)
-  + block("Giọng nói → chữ", "POST /v1/audio/transcriptions", `curl ${esc(base)}/v1/audio/transcriptions -H "Authorization: Bearer ${k}" \\
-  -F file=@ghi-am.mp3 -F model=auto -F language=vi`)
   + block("Embeddings", "POST /v1/embeddings", `curl ${esc(base)}/v1/embeddings -H "Authorization: Bearer ${k}" \\
   -H "Content-Type: application/json" -d '{"model":"auto","input":"Xin chào"}'`)
   + block("Kiểm tra nhanh", "curl", `curl ${esc(base)}/v1/chat/completions -H "Authorization: Bearer ${k}" \\
