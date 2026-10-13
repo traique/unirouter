@@ -8,7 +8,7 @@ Viết bằng Python (FastAPI), một tiến trình, dữ liệu trong một fil
  Bot · Claude Code · Codex CLI · Cursor · n8n · app OpenAI SDK
                          │
       Chat Completions · Responses · Anthropic Messages
-      Embeddings · Tạo ảnh · Giọng nói ↔ chữ
+      Embeddings · Tạo ảnh
                          ▼
  ┌──────────────────────── UniRouter ────────────────────────┐
  │ API key cho từng client · giới hạn model · giới hạn RPM   │
@@ -19,7 +19,6 @@ Viết bằng Python (FastAPI), một tiến trình, dữ liệu trong một fil
                          │
    ChatGPT (đăng nhập tài khoản) · NVIDIA NIM · Groq · OpenRouter
    Cerebras · Gemini · Mistral · DeepSeek · GitHub Models · OpenCode Zen
-   Microsoft Azure Speech · Microsoft Edge TTS (giọng đọc tiếng Việt)
    và mọi API tương thích OpenAI
 ```
 
@@ -28,12 +27,11 @@ Viết bằng Python (FastAPI), một tiến trình, dữ liệu trong một fil
 - **Dùng được ngay với model `auto`.** Thêm API key của một provider là gọi được, không cần cấu hình định tuyến. `auto` thử lần lượt mọi provider đang có key, lỗi thì chuyển tiếp.
 - **Ba chuẩn API cho chat:** OpenAI Chat Completions, OpenAI Responses và Anthropic Messages, có stream, tool calling, ảnh đầu vào và suy luận (reasoning).
 - **Embeddings và tạo ảnh** (`/v1/embeddings`, `/v1/images/generations`) dùng chung cơ chế chọn nguồn và tự chuyển khi lỗi. Ảnh trả về cả `url` lẫn `b64_json`.
-- **Giọng nói:** chuyển giọng nói thành chữ (`/v1/audio/transcriptions`, Whisper miễn phí qua Groq) và chữ thành giọng nói (`/v1/audio/speech`, giọng Neural tiếng Việt của Microsoft qua Edge TTS không cần key hoặc Azure Speech). Bot nhận tin nhắn thoại và trả lời bằng giọng nói được.
 - **ChatGPT bằng tài khoản Plus/Pro:** đăng nhập bằng mã thiết bị hoặc dán `auth.json` của Codex CLI. Token được tự làm mới và mã hóa khi lưu.
 - **Combo (alias):** đặt một tên model ảo (vd `gpt-4o`) trỏ tới nhiều model thật, với bốn chiến lược: ưu tiên, xoay vòng, nhanh nhất, ngẫu nhiên.
 - **Chịu lỗi tốt:** nhiều key cho mỗi provider, tạm khóa key bị 429/hết hạn mức đến lúc reset, circuit breaker cho nguồn lỗi liên tiếp, chỉ đổi nguồn khi chưa gửi chữ nào cho client.
 - **Bảo mật:** API key riêng cho từng bot (giới hạn model, giới hạn request/phút), token và key provider mã hóa bằng `SECRET_KEY`, trang quản trị chống dò mật khẩu và CSRF.
-- **Trang quản trị** sáng/tối: thống kê lưu lượng, lỗi, token theo model và theo key; quản lý provider, combo, key; khu thử nghiệm chat, tạo ảnh, embedding, đọc văn bản và ghi âm chuyển thành chữ; sao lưu dữ liệu một chạm.
+- **Trang quản trị** sáng/tối: thống kê lưu lượng, lỗi, token theo model và theo key; quản lý provider, combo, key; khu thử nghiệm chat, tạo ảnh, embedding; sao lưu dữ liệu một chạm.
 - **RTK Token Saver:** nén output tool dài (git diff, grep, log lặp) trước khi gửi lên model, giảm token cho các agent lập trình.
 
 ## Cài đặt nhanh
@@ -139,37 +137,6 @@ curl https://ai.example.com/v1/images/generations -H "Authorization: Bearer sk-u
 - ChatGPT (thử nghiệm): tạo ảnh bằng công cụ tạo ảnh của tài khoản ChatGPT, gọi qua `cx/gpt-image` hoặc để `auto` dùng khi không còn nguồn nào khác.
 - Kết quả có `data[].url` (link tạm, tự xóa sau 24 giờ) và `data[].b64_json`. Gửi `"response_format":"b64_json"` nếu chỉ cần base64.
 
-### Giọng nói → chữ
-
-```bash
-curl https://ai.example.com/v1/audio/transcriptions -H "Authorization: Bearer sk-uni-..." \
-  -F file=@tin-nhan-thoai.ogg -F model=auto -F language=vi
-# {"text": "..."}
-```
-
-- Thêm key **Groq** là dùng được ngay: mặc định `whisper-large-v3-turbo`, miễn phí, nhận mp3, wav, m4a, ogg, webm… tối đa 25 MB. Mistral (`voxtral-mini-latest`) cũng có sẵn.
-- Hỗ trợ các tham số chuẩn OpenAI: `language`, `prompt`, `response_format` (`json`, `text`, `srt`, `vtt`, `verbose_json`), `temperature`. SDK gửi `model="whisper-1"` vẫn chạy qua `auto`.
-
-### Chữ → giọng nói
-
-```bash
-curl https://ai.example.com/v1/audio/speech -H "Authorization: Bearer sk-uni-..." \
-  -H "Content-Type: application/json" -o tra-loi.mp3 \
-  -d '{"model":"auto","input":"Xin chào, mình là Lan Anh","voice":"vi-VN-HoaiMyNeural","speed":1.1}'
-```
-
-Có hai nguồn giọng đọc Microsoft, cùng bộ giọng Neural. `auto` dùng Azure trước, Edge sau.
-
-**Microsoft Edge TTS (không cần key).** Vào Providers → *Microsoft Edge TTS* → **Bật**. App dùng thư viện [edge-tts](https://github.com/rany2/edge-tts) để gọi dịch vụ "Đọc to" của trình duyệt Edge. Đây không phải API chính thức: Microsoft có thể chặn hoặc đổi bất cứ lúc nào, và dùng ngoài trình duyệt Edge có thể trái điều khoản của họ. Edge TTS luôn trả MP3.
-
-**Microsoft Azure Speech (API chính thức, gói miễn phí):**
-
-1. Tạo tài khoản Azure, vào **Create → Speech service**, chọn gói **Free F0** (khoảng 500.000 ký tự mỗi tháng) và Region gần bạn, ví dụ *Southeast Asia*.
-2. Mở tài nguyên vừa tạo → **Keys and Endpoint**, copy **Key 1**.
-3. Trong `/admin` → Providers → *Microsoft Azure Speech* → **Thêm key**: chọn đúng Region, dán key. App tự đọc thử một câu để kiểm tra.
-
-Giọng tiếng Việt: `vi-VN-HoaiMyNeural` (nữ), `vi-VN-NamMinhNeural` (nam). Bấm **Sửa → Lấy danh sách model** để thấy thêm các giọng *Multilingual* đọc được nhiều thứ tiếng. Trường `voice` nhận tên giọng Microsoft; giọng của OpenAI như `alloy` được đổi sang giọng mặc định. `response_format`: `mp3` (mặc định), `opus`, `wav`, `pcm`. Provider tương thích OpenAI có `/audio/speech` cũng dùng được: đặt *Model chữ → giọng* khi sửa provider.
-
 ### Endpoint
 
 | Endpoint | Mô tả |
@@ -179,8 +146,6 @@ Giọng tiếng Việt: `vi-VN-HoaiMyNeural` (nữ), `vi-VN-NamMinhNeural` (nam)
 | `POST /v1/messages`, `/v1/messages/count_tokens` | Anthropic Messages |
 | `POST /v1/embeddings` | Embeddings |
 | `POST /v1/images/generations` | Tạo ảnh |
-| `POST /v1/audio/transcriptions` | Giọng nói → chữ |
-| `POST /v1/audio/speech` | Chữ → giọng nói |
 | `GET /v1/models` | Danh sách model, combo và `auto` |
 | `GET /health` | Kiểm tra trạng thái |
 
@@ -222,7 +187,7 @@ unirouter/
   api.py           endpoint /v1
   router.py        chọn nguồn, combo, tự chuyển khi lỗi
   health.py        tạm khóa key, circuit breaker, giới hạn request
-  providers/       ChatGPT (Codex), API tương thích OpenAI, Azure Speech, danh mục provider
+  providers/       ChatGPT (Codex) và API tương thích OpenAI, danh mục provider
   formats/         chuyển đổi Chat ↔ Responses ↔ Anthropic
   rtk.py           nén output tool
   images.py        lưu tạm ảnh đã tạo
