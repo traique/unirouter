@@ -84,12 +84,12 @@ docker run -d -p 20128:20128 -v $PWD/data:/app/data \
 
 ## Bắt đầu trong trang quản trị
 
-1. **Providers:** chọn một provider trong mục *Thêm nhanh*, bấm **Lấy key** để đăng ký (đa số miễn phí), dán key vào. App tự lấy danh sách model từ provider và gọi thử: provider chưa có model thì lấy tất cả, provider có sẵn model mẫu thì bổ sung các model miễn phí (đuôi `:free`/`-free` hoặc giá 0 như OpenRouter; provider cả gói miễn phí như Groq, Gemini, NVIDIA, GitHub Models thì lấy hết). Có thể dán nhiều key, mỗi dòng một key, để xoay vòng.
+1. **Providers:** chọn một provider trong mục *Thêm nhanh*, bấm **Lấy key** để đăng ký (đa số miễn phí), dán key vào. Với mọi provider, app tự lấy danh sách model từ chính provider và gọi thử: provider có đánh dấu model miễn phí (đuôi `:free`/`-free` hoặc giá 0, như OpenRouter, OpenCode Zen) thì thêm các model đó và hỏi có thêm nốt model trả phí không; provider không đánh dấu (Groq, Gemini, NVIDIA, DeepSeek, GitHub Models, ChatGPT, provider tùy chỉnh…) thì thêm tất cả. Có thể dán nhiều key, mỗi dòng một key, để xoay vòng.
 2. **ChatGPT:** bấm **Đăng nhập ChatGPT**, mở link và nhập mã. Nếu máy chủ bị chặn khi đăng nhập, chạy `codex login` trên máy bạn rồi dán nội dung `~/.codex/auth.json` vào **Nhập auth.json**.
 3. **API Keys:** tạo một key `sk-uni-…` cho mỗi bot hoặc công cụ.
 4. Gọi model `auto`. Phần **Cài đặt → Kết nối client** có sẵn cấu hình mẫu để copy.
 
-Bấm vào một chip model trong thẻ provider để chọn nhanh: đặt làm model cho `auto`, gọi thử, copy tên hoặc bỏ khỏi danh sách. Chip có nhãn `auto` là model provider đó đang dùng khi gọi `auto`. Nút **+ model** trong thẻ cho phép gõ tay tên model (cách nhau bằng dấu phẩy) khi app không tự lấy được; nút **↻ lấy model** bổ sung model miễn phí từ chính provider bất cứ lúc nào, và hỏi có thêm tất cả không nếu provider không đánh dấu model miễn phí.
+Bấm vào một chip model trong thẻ provider để chọn nhanh: đặt làm model cho `auto`, gọi thử, copy tên hoặc bỏ khỏi danh sách. Chip có nhãn `auto` là model provider đó đang dùng khi gọi `auto`. Mọi provider đều có nút **+ model** để gõ tay tên model (cách nhau bằng dấu phẩy) khi app không tự lấy được, kể cả provider chưa có key; provider đã có key còn có **↻ lấy model** để lấy lại danh sách từ provider bất cứ lúc nào.
 
 Provider không có trong danh sách: bấm **Provider tùy chỉnh**, nhập tên, Base URL, API key. Header và các tùy chọn tương thích được tự xử lý.
 

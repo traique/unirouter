@@ -590,7 +590,7 @@ function addButtons(p, primary = true) {
 function modelTools(p) {
   const hasConn = p.connections.some(c => c.enabled);
   return `<span class="chip more" title="Thêm model bằng tay (khi app không tự lấy được)" onclick="addModelBox('${p.id}', this)">+ model</span>` +
-    (hasConn ? `<span class="chip more" title="Bổ sung model${p.free || p.type === "codex" ? "" : " miễn phí"} từ chính provider" onclick="syncModels('${p.id}')">↻ lấy model${p.free || p.type === "codex" ? "" : " free"}</span>` : "");
+    (hasConn ? `<span class="chip more" title="Lấy danh sách model từ chính provider (ưu tiên model miễn phí)" onclick="syncModels('${p.id}')">↻ lấy model</span>` : "");
 }
 function modelChips(p, limit = 8) {
   if (!p.models.length) return `<span class="muted" style="font-size:12.5px;line-height:22px">Chưa có model${p.connections.length ? "" : ", sẽ tự lấy khi thêm key"}</span>` + modelTools(p);
@@ -612,7 +612,7 @@ window.addModelBox = (pid, el) => {
   inp.onkeydown = run(async e => {
     if (e.key === "Escape") return cancel();
     if (e.key !== "Enter") return;
-    const names = inp.value.split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean);
+    const names = [...new Set(inp.value.split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean))];
     const add = names.filter(m => !p.models.includes(m));
     if (!names.length) return cancel();
     if (!add.length) { toast("Model đã có trong danh sách"); return cancel(); }
@@ -623,14 +623,30 @@ window.addModelBox = (pid, el) => {
   inp.onblur = () => setTimeout(() => { if (!inp.value.trim()) cancel(); }, 150);
 };
 
+window.addModelDialog = pid => {
+  const p = providers.find(x => x.id === pid);
+  modal(`${mHead(`Thêm model cho ${esc(p.name)}`, "Dùng khi app không tự lấy được danh sách model. Mỗi dòng hoặc mỗi dấu phẩy một model.")}
+    <label class="f"><span>Tên model</span><textarea id="amModels" style="min-height:70px" placeholder="vd: ${esc(p.models[0] || "gpt-4o-mini")}"></textarea></label>
+    ${p.models.length ? `<div class="hint" style="margin-top:-8px">Đang có: ${esc(p.models.slice(0, 6).join(", "))}${p.models.length > 6 ? ` và ${p.models.length - 6} model khác` : ""}</div>` : ""}
+    <div class="row end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="amSave">Thêm</button></div>`, m => {
+    m.querySelector("#amSave").onclick = run(async () => {
+      const add = [...new Set($("#amModels").value.split(/[\n,]+/).map(s => s.trim()))].filter(x => x && !p.models.includes(x));
+      if (!add.length) { toast("Chưa có model mới"); return; }
+      await api("/admin/api/providers", { body: { id: pid, models: [...p.models, ...add] } });
+      closeModal(); toast(`Đã thêm ${add.join(", ")}`); loadProviders();
+    });
+  });
+};
+
 window.syncModels = run(async (pid, mode = "free") => {
   const p = providers.find(x => x.id === pid);
   toast("Đang lấy danh sách model…");
   const r = await api(`/admin/api/providers/${pid}/sync-models`, { body: { mode } });
-  if (r.added.length) toast(`Đã thêm ${r.added.length} model${mode === "free" && !p.free ? " miễn phí" : ""} vào ${p.name} (${r.models} model)`);
-  else if (r.note && mode === "free" && r.fetched && confirm(`${r.note.replace(/ Bấm.*$/, "")}\n\nThêm tất cả ${r.fetched} model lấy được?`)) return syncModels(pid, "all");
+  const freeOnly = mode === "free" && r.free > 0;
+  if (r.added.length) toast(`Đã thêm ${r.added.length} model${freeOnly ? " miễn phí" : ""} vào ${p.name} (${r.models} model)`);
   else toast(r.note || `Không có model mới (provider trả ${r.fetched} model, đã có đủ)`);
   loadProviders();
+  if (freeOnly && r.paid_left && confirm(`${p.name} còn ${r.paid_left} model trả phí chưa thêm. Thêm nốt?`)) return syncModels(pid, "all");
 });
 
 function providerBlock(p) {
@@ -664,7 +680,8 @@ function providerTile(p) {
       <div class="row" style="gap:6px;margin-top:3px">${typeBadge(p)}</div></div></div>
     <div class="prov-note">${esc(p.note || (p.models.length ? p.models.slice(0, 3).join(", ") : "Tương thích OpenAI"))}</div>
     <div class="row">${addButtons(p)}${p.signup_url ? `<a class="btn sm ghost" href="${esc(p.signup_url)}" target="_blank" rel="noopener">Lấy key${icon("ext")}</a>` : ""}
-      <button class="btn sm ghost" style="margin-left:auto" onclick="editProvider('${p.id}')">Sửa</button></div></div>`;
+      <button class="btn sm ghost" style="margin-left:auto" title="Thêm model bằng tay" onclick="addModelDialog('${p.id}')">+ model</button>
+      <button class="btn sm ghost" onclick="editProvider('${p.id}')">Sửa</button></div></div>`;
 }
 
 window.modelMenu = (pid, m) => {

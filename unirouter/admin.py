@@ -237,29 +237,27 @@ def _auto_addable(model: str) -> bool:
 async def sync_models(st, provider: dict[str, Any], conn: dict[str, Any], mode: str = "free") -> dict[str, Any]:
     """Lấy danh sách model từ provider và bổ sung vào danh sách hiện có (không xóa model đang có).
 
-    mode "free": chỉ thêm model miễn phí. Provider đánh dấu miễn phí qua đuôi :free/-free hoặc giá = 0 thì
-    lấy đúng các model đó; provider mà cả gói đều miễn phí (Groq, Gemini, NVIDIA, GitHub Models...) hoặc
-    ChatGPT (backend trả đúng model tài khoản dùng được) thì lấy tất cả. Provider chưa có model nào cũng lấy tất cả.
-    mode "all": thêm mọi model lấy được.
+    Áp dụng cho mọi provider (API key lẫn ChatGPT). mode "free": provider có đánh dấu model miễn phí (đuôi
+    :free/-free hoặc giá = 0, như OpenRouter, OpenCode Zen, TokenRouter) thì chỉ thêm các model đó; provider
+    không đánh dấu gì (Groq, Gemini, NVIDIA, DeepSeek, ChatGPT, provider tùy chỉnh...) thì thêm tất cả model
+    lấy được. mode "all": thêm mọi model, kể cả model trả phí của provider có đánh dấu.
+    Trả về cả `paid_left`: số model trả phí chưa thêm (để trang admin hỏi có thêm nốt không).
     """
     pid = provider["id"]
     items = await st.providers[provider["type"]].list_models_detailed(provider, conn)
     existing = list(provider["models"])
     free_marked = [it["id"] for it in items if it.get("free")]
     all_ids = [it["id"] for it in items]
-    if mode == "all" or not existing:
-        picks = all_ids
-    elif free_marked:
-        picks = free_marked
-    elif provider.get("free") or provider["type"] == "codex":
-        picks = all_ids
-    else:
-        picks = []
+    # provider chưa có model nào -> lấy hết (miễn phí đã xếp trước nên "auto" vẫn ưu tiên model miễn phí)
+    picks = free_marked if (mode == "free" and free_marked and existing) else all_ids
     have = set(existing)
     added = [m for m in picks if m not in have and _auto_addable(m)]
     if added:
         st.store.upsert_provider({"id": pid, "models": existing + added})
-    return {"fetched": len(items), "free": len(free_marked), "added": added, "models": len(existing) + len(added)}
+        have |= set(added)
+    paid_left = [m for m in all_ids if m not in have and _auto_addable(m)]
+    return {"fetched": len(items), "free": len(free_marked), "added": added, "models": len(have),
+            "paid_left": len(paid_left)}
 
 
 @router.post("/admin/api/providers/{pid}/sync-models")
@@ -280,11 +278,8 @@ async def sync_models_route(pid: str, request: Request):
         r = await sync_models(st, p, conn, mode)
     except ProviderError as e:
         raise HTTPException(502, f"Không lấy được danh sách model: {e.message}") from e
-    if not r["added"] and not r["fetched"]:
-        r["note"] = "Provider không trả về model nào."
-    elif not r["added"] and mode == "free" and not r["free"] and not p.get("free"):
-        r["note"] = (f"Provider trả về {r['fetched']} model nhưng không đánh dấu model nào miễn phí. "
-                     f"Bấm \"Lấy tất cả\" hoặc thêm từng model.")
+    if not r["fetched"]:
+        r["note"] = "Provider không trả về model nào. Dùng \"+ model\" để thêm bằng tay."
     return r
 
 
