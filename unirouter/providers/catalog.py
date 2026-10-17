@@ -8,6 +8,15 @@ from __future__ import annotations
 from typing import Any
 
 CODEX_LITE_MODELS = ["gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"]
+CODEX_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh")
+
+
+def codex_base_model(model: str) -> str:
+    """Bỏ hậu tố mức suy luận (-low, -high...) để so khớp tên model ChatGPT."""
+    for level in CODEX_EFFORTS:
+        if model.endswith(f"-{level}"):
+            return model[: -len(level) - 1]
+    return model
 # Model OpenAI đã ngừng cho tài khoản ChatGPT ("not supported when using Codex with a ChatGPT account").
 # Được dọn khỏi DB cũ lúc khởi động; model bị từ chối lúc chạy cũng tự bị bỏ khỏi danh sách (router).
 CODEX_RETIRED_MODELS = ["gpt-5.5"]

@@ -17,7 +17,7 @@ from typing import Any
 from cryptography.fernet import Fernet, InvalidToken
 
 from . import config
-from .providers.catalog import CODEX_RETIRED_MODELS, PRESETS
+from .providers.catalog import CODEX_RETIRED_MODELS, PRESETS, codex_base_model
 
 PRESET_BY_ID = {p["id"]: p for p in PRESETS}
 
@@ -187,10 +187,10 @@ class Store:
         for r in self.q("SELECT id, models, options FROM providers WHERE type='codex'"):
             models = json.loads(r["models"])
             opts = json.loads(r["options"])
-            kept = [m for m in models if m not in CODEX_RETIRED_MODELS]
+            kept = [m for m in models if codex_base_model(m) not in CODEX_RETIRED_MODELS]
             changed = len(kept) != len(models)
             for k in ("auto_model", "image_chat_model"):
-                if opts.get(k) in CODEX_RETIRED_MODELS:
+                if isinstance(opts.get(k), str) and codex_base_model(opts[k]) in CODEX_RETIRED_MODELS:
                     opts.pop(k)
                     changed = True
             if changed:

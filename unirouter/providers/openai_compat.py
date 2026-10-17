@@ -287,11 +287,25 @@ class OpenAICompatProvider(Provider):
         found: dict[str, bool] = {}
         for it in items or []:
             mid = (it.get("id") or it.get("name")) if isinstance(it, dict) else it
-            if isinstance(mid, str) and mid:
-                mid = mid.removeprefix("models/")
-                found[mid] = found.get(mid, False) or is_free_model(mid, it)
+            if not isinstance(mid, str):
+                continue
+            mid = mid.strip().removeprefix("models/")
+            if not mid or len(mid) > 200 or any(c.isspace() for c in mid):
+                continue
+            if isinstance(it, dict) and not text_or_image_output(it):
+                continue  # model chỉ xuất audio/video (OpenRouter Lyria...) không dùng được qua chat/ảnh
+            found[mid] = found.get(mid, False) or is_free_model(mid, it)
         # model miễn phí xếp trước để "auto" ưu tiên dùng
         return [{"id": m, "free": free} for m, free in sorted(found.items(), key=lambda kv: (not kv[1], kv[0]))]
+
+
+def text_or_image_output(item: dict[str, Any]) -> bool:
+    """OpenRouter trả architecture.output_modalities; nếu có mà không gồm text/image thì bỏ qua."""
+    arch = item.get("architecture")
+    out = arch.get("output_modalities") if isinstance(arch, dict) else None
+    if isinstance(out, list) and out:
+        return any(str(o).lower() in ("text", "image") for o in out)
+    return True
 
 
 def is_free_model(model_id: str, item: Any) -> bool:
@@ -305,9 +319,13 @@ def is_free_model(model_id: str, item: Any) -> bool:
         if isinstance(item.get(k), bool):
             return item[k]
     pricing = item.get("pricing")
-    if isinstance(pricing, dict) and pricing:
+    if isinstance(pricing, dict):
+        # OpenRouter: prompt/completion/request; provider khác có thể dùng input/output. Thiếu hết -> không rõ -> không free
+        keys = [k for k in ("prompt", "completion", "request", "input", "output") if k in pricing]
+        if not keys:
+            return False
         try:
-            return all(float(pricing.get(k) or 0) == 0 for k in ("prompt", "completion"))
+            return all(float(pricing[k] or 0) == 0 for k in keys)
         except (TypeError, ValueError):
             return False
     return False

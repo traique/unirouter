@@ -18,9 +18,11 @@ from typing import Any
 
 from .health import Health
 from .providers.base import CallContext, Event, Provider, ProviderError, Target, model_kind
+from .providers.catalog import codex_base_model
 
 
 AUTO_MODEL = "auto"
+MAX_MODEL_SWAPS = 8  # số lần tối đa một request được đổi sang model kế tiếp của cùng provider
 log = logging.getLogger("unirouter.router")
 
 
@@ -195,6 +197,7 @@ class Router:
         attempts: list[dict[str, Any]] = []
         last: ProviderError | None = None
         waits: list[float] = []
+        swaps = 0
 
         while queue:
             target = queue.pop(0)
@@ -240,7 +243,8 @@ class Router:
                         continue  # thử tài khoản khác của cùng provider
                     if err.scope == "model":
                         nxt = self._replace_model(target, err, "chat")
-                        if nxt is not None:
+                        if nxt is not None and swaps < MAX_MODEL_SWAPS:
+                            swaps += 1
                             queue.insert(0, nxt)  # cùng provider, model kế tiếp
                     break  # thử đích tiếp theo
                 except Exception as e:  # lỗi lạ: không để sập cả request
@@ -272,6 +276,7 @@ class Router:
         attempts: list[dict[str, Any]] = []
         last: ProviderError | None = None
         waits: list[float] = []
+        swaps = 0
         while queue:
             target = queue.pop(0)
             provider = target.provider
@@ -304,7 +309,8 @@ class Router:
                         continue
                     if err.scope == "model":
                         nxt = self._replace_model(target, err, kind)
-                        if nxt is not None:
+                        if nxt is not None and swaps < MAX_MODEL_SWAPS:
+                            swaps += 1
                             queue.insert(0, nxt)
                     break
                 except Exception as e:  # noqa: BLE001 - lỗi lạ (thường do dữ liệu request): không phạt tài khoản
@@ -331,34 +337,40 @@ class Router:
     def _replace_model(self, target: Target, err: ProviderError, kind: str) -> Target | None:
         """Provider không còn hỗ trợ model (vd ChatGPT ngừng gpt-5.5): bỏ model khỏi danh sách provider.
 
-        Trả về đích thay thế (model kế tiếp của cùng provider) nếu model cũ do "auto" chọn; client chỉ
-        định đích cụ thể thì chỉ bỏ model, không tự đổi sang model khác. Mỗi lần gọi bỏ ít nhất một
-        model nên vòng thử luôn kết thúc.
+        So khớp theo tên gốc (bỏ hậu tố effort với ChatGPT) nên "gpt-5.5-high" cũng bị bỏ khi backend báo
+        "gpt-5.5". Trả về đích thay thế khi model hỏng không phải thứ client chỉ định đích danh: đích do
+        "auto" chọn, hoặc tạo ảnh qua ChatGPT (model chat do provider tự chọn). Nhiều request đồng thời cùng
+        dính một model: request đến sau thấy danh sách đã sạch (không đổi gì) vẫn được chuyển sang model kế
+        tiếp. Vòng thử bị chặn bởi MAX_MODEL_SWAPS ở nơi gọi.
         """
         pid = target.provider["id"]
         p = self.store.providers.get(pid)
         if p is None:
             return None
-        gone = err.model or target.model
-        models = [m for m in p["models"] if m != gone]
+        base = codex_base_model if p["type"] == "codex" else (lambda m: m)
+        gone = base(err.model or target.model)
+        models = [m for m in p["models"] if base(m) != gone]
         opts = dict(p.get("options") or {})
         changed = len(models) != len(p["models"])
         for k in ("auto_model", "image_chat_model"):
-            if opts.get(k) == gone:
+            if isinstance(opts.get(k), str) and base(opts[k]) == gone:
                 opts.pop(k)
                 changed = True
-        if not changed:
-            return None
-        try:
-            p = self.store.upsert_provider({"id": pid, "models": models, "options": opts})
-        except Exception:  # noqa: BLE001 - không lưu được thì vẫn trả lỗi bình thường
-            return None
-        log.warning("%s từ chối model '%s' ([%s] %s) → đã bỏ khỏi danh sách model của provider",
-                    p["name"], gone, err.status, err.message[:200])
-        if not target.auto:
-            return None
+        if changed:
+            try:
+                p = self.store.upsert_provider({"id": pid, "models": models, "options": opts})
+            except Exception:  # noqa: BLE001 - không lưu được thì vẫn trả lỗi bình thường
+                return None
+            log.warning("%s từ chối model '%s' ([%s] %s) → đã bỏ khỏi danh sách model của provider",
+                        p["name"], gone, err.status, err.message[:200])
+        if not target.auto and base(target.model) == gone:
+            return None  # client gọi đích danh model này: trả lỗi, không tự đổi sang model khác
         model = self.kind_model(p, kind)
-        return self._target(pid, model, auto=True) if model else None
+        if not model or base(model) == gone:
+            return None
+        if model == target.model and not changed:
+            return None  # không có gì mới để thử
+        return self._target(pid, model, auto=target.auto)
 
     def _fail(self, target: Target, conn: dict[str, Any], err: ProviderError, started: float,
               attempts: list[dict[str, Any]]) -> None:

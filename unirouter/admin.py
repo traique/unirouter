@@ -245,11 +245,14 @@ async def sync_models(st, provider: dict[str, Any], conn: dict[str, Any], mode: 
     """
     pid = provider["id"]
     items = await st.providers[provider["type"]].list_models_detailed(provider, conn)
-    existing = list(provider["models"])
+    # đọc lại danh sách SAU khi chờ mạng: admin có thể vừa thêm/bỏ model trong lúc đó
+    current = st.store.providers.get(pid) or provider
+    existing = list(current["models"])
     free_marked = [it["id"] for it in items if it.get("free")]
     all_ids = [it["id"] for it in items]
     # provider chưa có model nào -> lấy hết (miễn phí đã xếp trước nên "auto" vẫn ưu tiên model miễn phí)
-    picks = free_marked if (mode == "free" and free_marked and existing) else all_ids
+    free_only = bool(mode == "free" and free_marked and existing)
+    picks = free_marked if free_only else all_ids
     have = set(existing)
     added = [m for m in picks if m not in have and _auto_addable(m)]
     if added:
@@ -257,7 +260,7 @@ async def sync_models(st, provider: dict[str, Any], conn: dict[str, Any], mode: 
         have |= set(added)
     paid_left = [m for m in all_ids if m not in have and _auto_addable(m)]
     return {"fetched": len(items), "free": len(free_marked), "added": added, "models": len(have),
-            "paid_left": len(paid_left)}
+            "paid_left": len(paid_left), "free_only": free_only}
 
 
 @router.post("/admin/api/providers/{pid}/sync-models")
@@ -278,6 +281,8 @@ async def sync_models_route(pid: str, request: Request):
         r = await sync_models(st, p, conn, mode)
     except ProviderError as e:
         raise HTTPException(502, f"Không lấy được danh sách model: {e.message}") from e
+    except Exception as e:  # noqa: BLE001 - lỗi mạng / JSON lạ từ provider
+        raise HTTPException(502, f"Không lấy được danh sách model: {type(e).__name__}: {e}") from e
     if not r["fetched"]:
         r["note"] = "Provider không trả về model nào. Dùng \"+ model\" để thêm bằng tay."
     return r
@@ -440,7 +445,8 @@ async def run_test(st, provider: dict[str, Any], conn: dict[str, Any], model: st
         async for ev in it:
             writer.feed(ev)
     except ProviderError as e:
-        st.store.set_connection_error(cid, f"[{e.status}] {e.message}"[:300])
+        if e.scope == "account":  # lỗi do model/tham số không phải lỗi của tài khoản -> không gắn nhãn "Lỗi" cho key
+            st.store.set_connection_error(cid, f"[{e.status}] {e.message}"[:300])
         return {"ok": False, "status": e.status, "error": e.message, "ms": int((time.monotonic() - t0) * 1000)}
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": f"{type(e).__name__}: {e}", "ms": int((time.monotonic() - t0) * 1000)}
@@ -466,6 +472,8 @@ async def fetch_models(pid: str, request: Request):
         models = await st.providers[p["type"]].list_models(p, conn)
     except ProviderError as e:
         raise HTTPException(502, f"Không lấy được danh sách model: {e.message}") from e
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Không lấy được danh sách model: {type(e).__name__}: {e}") from e
     return {"models": models}
 
 

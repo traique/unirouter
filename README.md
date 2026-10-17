@@ -84,7 +84,7 @@ docker run -d -p 20128:20128 -v $PWD/data:/app/data \
 
 ## Bắt đầu trong trang quản trị
 
-1. **Providers:** chọn một provider trong mục *Thêm nhanh*, bấm **Lấy key** để đăng ký (đa số miễn phí), dán key vào. Với mọi provider, app tự lấy danh sách model từ chính provider và gọi thử: provider có đánh dấu model miễn phí (đuôi `:free`/`-free` hoặc giá 0, như OpenRouter, OpenCode Zen) thì thêm các model đó và hỏi có thêm nốt model trả phí không; provider không đánh dấu (Groq, Gemini, NVIDIA, DeepSeek, GitHub Models, ChatGPT, provider tùy chỉnh…) thì thêm tất cả. Có thể dán nhiều key, mỗi dòng một key, để xoay vòng.
+1. **Providers:** chọn một provider trong mục *Thêm nhanh*, bấm **Lấy key** để đăng ký (đa số miễn phí), dán key vào. Với mọi provider, app tự lấy danh sách model từ chính provider và gọi thử: provider có đánh dấu model miễn phí (đuôi `:free`/`-free` hoặc giá 0, như OpenRouter, OpenCode Zen) thì chỉ thêm các model đó; provider không đánh dấu (Groq, Gemini, NVIDIA, DeepSeek, GitHub Models, provider tùy chỉnh…) thì thêm tất cả. Bấm **↻ lấy model** trong thẻ provider để lấy lại bất cứ lúc nào (với ChatGPT là danh sách model tài khoản được dùng); nếu còn model trả phí chưa thêm, app sẽ hỏi. Có thể dán nhiều key, mỗi dòng một key, để xoay vòng.
 2. **ChatGPT:** bấm **Đăng nhập ChatGPT**, mở link và nhập mã. Nếu máy chủ bị chặn khi đăng nhập, chạy `codex login` trên máy bạn rồi dán nội dung `~/.codex/auth.json` vào **Nhập auth.json**.
 3. **API Keys:** tạo một key `sk-uni-…` cho mỗi bot hoặc công cụ.
 4. Gọi model `auto`. Phần **Cài đặt → Kết nối client** có sẵn cấu hình mẫu để copy.

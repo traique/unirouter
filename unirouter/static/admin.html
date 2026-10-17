@@ -595,32 +595,46 @@ function modelTools(p) {
 function modelChips(p, limit = 8) {
   if (!p.models.length) return `<span class="muted" style="font-size:12.5px;line-height:22px">Chưa có model${p.connections.length ? "" : ", sẽ tự lấy khi thêm key"}</span>` + modelTools(p);
   const auto = p.kinds?.chat;
-  const shown = p.models.slice(0, limit).map(m => {
+  let list = p.models.slice(0, limit);
+  if (auto && !list.includes(auto) && p.models.includes(auto)) list = [auto, ...p.models.filter(m => m !== auto).slice(0, limit - 1)];
+  const shown = list.map(m => {
     const tip = [m === auto ? "Model dùng khi gọi \"auto\"" : "", p.latency[m] ? "TTFB ~" + p.latency[m] + " ms" : "", "Bấm để chọn"].filter(Boolean).join(" · ");
     return `<span class="chip pick ${m === auto ? "auto" : ""}" title="${esc(tip)}" data-m="${esc(m)}" onclick="modelMenu('${p.id}', this.dataset.m)">${esc(m)}</span>`;
   }).join("");
   return shown + (p.models.length > limit ? `<span class="chip more" onclick="editProvider('${p.id}')">+${p.models.length - limit} model</span>` : "") + modelTools(p);
 }
 
-window.addModelBox = (pid, el) => {
+// Lấy bản mới nhất của provider trước khi ghi danh sách model (router có thể vừa tự bỏ model, hoặc tab khác vừa sửa)
+async function freshProvider(pid) {
+  providers = (await api("/admin/api/providers")).data;
   const p = providers.find(x => x.id === pid);
+  if (!p) throw new Error("Provider không còn tồn tại");
+  return p;
+}
+const splitModels = text => [...new Set(text.split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean))];
+
+window.addModelBox = (pid, el) => {
   const inp = document.createElement("input");
   inp.className = "chip-in"; inp.placeholder = "tên model, Enter để thêm"; inp.autocomplete = "off"; inp.spellcheck = false;
   el.replaceWith(inp); inp.focus();
   let done = false;
-  const cancel = () => { if (done) return; done = true; loadProviders(); };
+  const cancel = () => { if (done) return; done = true; inp.replaceWith(el); };  // trả lại chip, không vẽ lại cả trang
   inp.onkeydown = run(async e => {
     if (e.key === "Escape") return cancel();
-    if (e.key !== "Enter") return;
-    const names = [...new Set(inp.value.split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean))];
-    const add = names.filter(m => !p.models.includes(m));
+    if (e.key !== "Enter" || done) return;
+    const names = splitModels(inp.value);
     if (!names.length) return cancel();
-    if (!add.length) { toast("Model đã có trong danh sách"); return cancel(); }
     done = true; inp.disabled = true;
-    await api("/admin/api/providers", { body: { id: pid, models: [...p.models, ...add] } });
-    toast(`Đã thêm ${add.join(", ")}`); loadProviders();
+    try {
+      const p = await freshProvider(pid);
+      const add = names.filter(m => !p.models.includes(m));
+      if (!add.length) { toast("Model đã có trong danh sách"); inp.replaceWith(el); return; }
+      await api("/admin/api/providers", { body: { id: pid, models: [...p.models, ...add] } });
+      toast(`Đã thêm ${add.join(", ")}`);
+    } catch (e) { done = false; inp.disabled = false; inp.focus(); throw e; }
+    loadProviders();
   });
-  inp.onblur = () => setTimeout(() => { if (!inp.value.trim()) cancel(); }, 150);
+  inp.onblur = () => setTimeout(() => { if (!done && !inp.value.trim()) cancel(); }, 150);
 };
 
 window.addModelDialog = pid => {
@@ -630,9 +644,10 @@ window.addModelDialog = pid => {
     ${p.models.length ? `<div class="hint" style="margin-top:-8px">Đang có: ${esc(p.models.slice(0, 6).join(", "))}${p.models.length > 6 ? ` và ${p.models.length - 6} model khác` : ""}</div>` : ""}
     <div class="row end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="amSave">Thêm</button></div>`, m => {
     m.querySelector("#amSave").onclick = run(async () => {
-      const add = [...new Set($("#amModels").value.split(/[\n,]+/).map(s => s.trim()))].filter(x => x && !p.models.includes(x));
+      const cur = await freshProvider(pid);
+      const add = splitModels($("#amModels").value.replace(/ /g, "\n")).filter(x => !cur.models.includes(x));
       if (!add.length) { toast("Chưa có model mới"); return; }
-      await api("/admin/api/providers", { body: { id: pid, models: [...p.models, ...add] } });
+      await api("/admin/api/providers", { body: { id: pid, models: [...cur.models, ...add] } });
       closeModal(); toast(`Đã thêm ${add.join(", ")}`); loadProviders();
     });
   });
@@ -642,11 +657,15 @@ window.syncModels = run(async (pid, mode = "free") => {
   const p = providers.find(x => x.id === pid);
   toast("Đang lấy danh sách model…");
   const r = await api(`/admin/api/providers/${pid}/sync-models`, { body: { mode } });
-  const freeOnly = mode === "free" && r.free > 0;
-  if (r.added.length) toast(`Đã thêm ${r.added.length} model${freeOnly ? " miễn phí" : ""} vào ${p.name} (${r.models} model)`);
-  else toast(r.note || `Không có model mới (provider trả ${r.fetched} model, đã có đủ)`);
+  const added = r.added.length ? `Đã thêm ${r.added.length} model${r.free_only ? " miễn phí" : ""} vào ${p.name} (${r.models} model).` : "";
+  if (r.free_only && r.paid_left) {
+    loadProviders();
+    if (confirm(`${added ? added + "\n\n" : ""}${p.name} còn ${r.paid_left} model trả phí chưa thêm. Thêm nốt?`)) return syncModels(pid, "all");
+    if (added) toast(added);
+    return;
+  }
+  toast(added || r.note || `Không có model mới (provider trả ${r.fetched} model, đã có đủ)`);
   loadProviders();
-  if (freeOnly && r.paid_left && confirm(`${p.name} còn ${r.paid_left} model trả phí chưa thêm. Thêm nốt?`)) return syncModels(pid, "all");
 });
 
 function providerBlock(p) {
@@ -698,7 +717,8 @@ window.modelMenu = (pid, m) => {
     </div>
     <div class="row end"><button class="btn ghost" onclick="closeModal()">Đóng</button></div>`, d => {
     d.querySelector("#mmAuto").onclick = run(async () => {
-      await api("/admin/api/providers", { body: { id: pid, options: { ...(p.options || {}), auto_model: m } } });
+      const cur = await freshProvider(pid);
+      await api("/admin/api/providers", { body: { id: pid, options: { ...(cur.options || {}), auto_model: m } } });
       closeModal(); toast(`"auto" sẽ dùng ${p.alias}/${m}`); loadProviders();
     });
     d.querySelector("#mmTest").onclick = run(async () => {
@@ -711,10 +731,11 @@ window.modelMenu = (pid, m) => {
     });
     d.querySelector("#mmCopy").onclick = () => copyText(`${p.alias}/${m}`);
     d.querySelector("#mmDrop").onclick = run(async () => {
-      if (!confirm(`Bỏ model ${m} khỏi ${p.name}? Có thể thêm lại trong Sửa.`)) return;
-      const opts = { ...(p.options || {}) };
+      if (!confirm(`Bỏ model ${m} khỏi ${p.name}? Có thể thêm lại bằng "+ model".`)) return;
+      const cur = await freshProvider(pid);
+      const opts = { ...(cur.options || {}) };
       for (const k of ["auto_model", "image_chat_model"]) if (opts[k] === m) delete opts[k];
-      await api("/admin/api/providers", { body: { id: pid, models: p.models.filter(x => x !== m), options: opts } });
+      await api("/admin/api/providers", { body: { id: pid, models: cur.models.filter(x => x !== m), options: opts } });
       closeModal(); toast(`Đã bỏ ${m}`); loadProviders();
     });
   });

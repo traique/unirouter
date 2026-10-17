@@ -135,6 +135,9 @@ async def catalog_rich():
                      {"id": "or/zero", "pricing": {"prompt": "0", "completion": "0"}},
                      {"id": "or/gemma:free", "pricing": {"prompt": "0", "completion": "0"}},
                      {"id": "or/whisper-free", "pricing": {"prompt": "0", "completion": "0"}},
+                     {"id": "or/lyria-audio", "pricing": {"prompt": "0", "completion": "0"},
+                      "architecture": {"output_modalities": ["audio"]}},
+                     {"id": "tg/input-output", "pricing": {"input": "0.5", "output": "1.5"}},
                      {"id": "ok"}]}
 
 
@@ -163,6 +166,9 @@ async def codex(request: Request):
         return JSONResponse({"error": {"type": "invalid_request_error", "code": "unsupported_model", "message":
                                        f"The '{model}' model is not supported when using Codex with a ChatGPT account."}},
                             400)
+    if model == "gpt-badparam":  # lỗi tham số request: có chữ "model" + "not supported" nhưng KHÔNG phải model hỏng
+        return JSONResponse({"error": {"type": "invalid_request_error", "code": "unsupported_parameter", "param": "text.verbosity",
+                                       "message": "Unsupported parameter: 'text.verbosity' is not supported with this model."}}, 400)
 
     async def gen():
         yield ev({"type": "response.created", "response": {"id": "resp_1", "status": "in_progress"}})
@@ -201,6 +207,14 @@ async def codex(request: Request):
                                                              "usage": {"input_tokens": 20, "output_tokens": 4}}})
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@app.get("/codex/models")
+async def codex_models(request: Request):
+    calls["codex-models"] = calls.get("codex-models", 0) + 1
+    if not request.headers.get("authorization", "").startswith("Bearer ey"):
+        return JSONResponse({"detail": "Unauthorized"}, 401)
+    return {"models": [{"slug": "gpt-ok"}, {"slug": "gpt-new-b"}, {"slug": "gpt-new-a"}]}
 
 
 @app.post("/auth/oauth/token")
