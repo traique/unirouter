@@ -1,5 +1,6 @@
-import time
+import contextlib
 import json
+import time
 
 import anthropic
 import httpx
@@ -751,3 +752,58 @@ def test_seed_retires_codex_models():
     p = st.providers["codex"]
     assert p["models"] == ["gpt-5.6-sol"]
     assert "auto_model" not in p["options"] and p["options"]["default_effort"] == "low"
+
+
+# ------------------------------------------------------------------ bổ sung model miễn phí
+@contextlib.contextmanager
+def _admin(env):
+    with httpx.Client(base_url=env["base"], headers={"X-Requested-With": "unirouter"}) as c:
+        c.post("/admin/api/login", json={"username": "admin", "password": "pw"})
+        yield c
+
+
+def test_free_model_detection_by_pricing(env):
+    st = env["st"]
+    st.store.upsert_provider({"id": "richp", "alias": "rp", "name": "Rich", "type": "openai", "base_url": env["up"] + "/oai/v1",
+                              "models": ["ok"], "options": {"models_url": env["up"] + "/catalog/rich"}})
+    with _admin(env) as c:
+        # provider đã có model (như preset) -> thêm key chỉ bổ sung model miễn phí, bỏ model giọng nói
+        r = c.post("/admin/api/providers/richp/connections", json={"api_key": "good"}).json()
+        assert r["added_models"] == 2 and r["test"]["ok"]
+        assert st.store.providers["richp"]["models"] == ["ok", "or/gemma:free", "or/zero"]
+        # gọi lại: không thêm trùng
+        r = c.post("/admin/api/providers/richp/sync-models", json={"mode": "free"}).json()
+        assert r["added"] == [] and r["fetched"] == 5 and r["free"] == 3
+        # lấy tất cả: thêm nốt model trả phí, vẫn bỏ whisper
+        r = c.post("/admin/api/providers/richp/sync-models", json={"mode": "all"}).json()
+        assert r["added"] == ["or/paid"]
+        # fetch-models (hộp Sửa) vẫn trả đủ, miễn phí xếp trước
+        assert c.post("/admin/api/providers/richp/fetch-models").json()["models"][:3] == ["or/gemma:free", "or/whisper-free", "or/zero"]
+
+
+def test_sync_models_free_provider_takes_all(env):
+    """Provider cả gói miễn phí (preset free=True, kiểu Groq) không đánh dấu model -> lấy tất cả model chat."""
+    st = env["st"]
+    groq = st.store.providers["groq"]
+    saved = {"base_url": groq["base_url"], "models": list(groq["models"]), "options": dict(groq["options"])}
+    st.store.upsert_provider({"id": "groq", "base_url": env["up"] + "/oai/v1",
+                              "options": {**saved["options"], "models_url": env["up"] + "/catalog/plain"}})
+    try:
+        with _admin(env) as c:
+            r = c.post("/admin/api/providers/groq/connections", json={"api_key": "good"}).json()
+            assert r["added_models"] == 3
+            assert st.store.providers["groq"]["models"] == [*saved["models"], "ok", "p1", "p2"]
+            assert st.store.providers["groq"]["models"][0] == saved["models"][0]  # giữ thứ tự ưu tiên của preset
+            # provider không free, không đánh dấu -> không thêm gì, có gợi ý
+            st.store.upsert_provider({"id": "plainp", "alias": "pp", "name": "Plain", "type": "openai", "models": ["ok"],
+                                      "base_url": env["up"] + "/oai/v1", "options": {"models_url": env["up"] + "/catalog/plain"}})
+            st.store.add_connection("plainp", "k", {"api_key": "good"})
+            r = c.post("/admin/api/providers/plainp/sync-models", json={}).json()
+            assert r["added"] == [] and "không đánh dấu" in r["note"]
+            r = c.post("/admin/api/providers/plainp/sync-models", json={"mode": "all"}).json()
+            assert r["added"] == ["p1", "p2"]
+            assert c.post("/admin/api/providers/nope/sync-models", json={}).status_code == 404
+    finally:
+        for cid in [c["id"] for c in st.store.provider_connections("groq")]:
+            st.store.delete_connection(cid)
+        st.store.upsert_provider({"id": "groq", **saved})

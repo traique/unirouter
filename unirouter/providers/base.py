@@ -96,7 +96,11 @@ class Provider:
         raise NotImplementedError
 
     async def list_models(self, provider: dict[str, Any], connection: dict[str, Any]) -> list[str]:
-        return list(provider.get("models") or [])
+        return [m["id"] for m in await self.list_models_detailed(provider, connection)]
+
+    async def list_models_detailed(self, provider: dict[str, Any], connection: dict[str, Any]) -> list[dict[str, Any]]:
+        """Danh sách model từ provider: [{"id", "free"}]. Model miễn phí xếp trước."""
+        return [{"id": m, "free": False} for m in provider.get("models") or []]
 
     async def embeddings(self, target: Target, connection: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
         raise ProviderError(400, f"{target.provider['name']} không hỗ trợ embeddings", "target")

@@ -275,7 +275,7 @@ class OpenAICompatProvider(Provider):
             raise ProviderError(502, f"{target.provider['name']} không trả về ảnh")
         return data
 
-    async def list_models(self, provider: dict[str, Any], connection: dict[str, Any]) -> list[str]:
+    async def list_models_detailed(self, provider: dict[str, Any], connection: dict[str, Any]) -> list[dict[str, Any]]:
         url = (provider.get("options") or {}).get("models_url") or provider["base_url"].rstrip("/") + "/models"
         h = headers_for(provider, connection["_secret"])
         h["Accept"] = "application/json"
@@ -284,10 +284,30 @@ class OpenAICompatProvider(Provider):
             raise classify_http(resp.status_code, http.error_message(resp.content, resp.status_code))
         data = resp.json()
         items = (data.get("data") or data.get("models") or []) if isinstance(data, dict) else data
-        ids = []
+        found: dict[str, bool] = {}
         for it in items or []:
             mid = (it.get("id") or it.get("name")) if isinstance(it, dict) else it
-            if isinstance(mid, str):
-                ids.append(mid.removeprefix("models/"))
-        # model miễn phí (đuôi -free / :free) xếp trước để "auto" ưu tiên dùng
-        return sorted(set(ids), key=lambda m: (not (m.endswith("-free") or m.endswith(":free")), m))
+            if isinstance(mid, str) and mid:
+                mid = mid.removeprefix("models/")
+                found[mid] = found.get(mid, False) or is_free_model(mid, it)
+        # model miễn phí xếp trước để "auto" ưu tiên dùng
+        return [{"id": m, "free": free} for m, free in sorted(found.items(), key=lambda kv: (not kv[1], kv[0]))]
+
+
+def is_free_model(model_id: str, item: Any) -> bool:
+    """Model miễn phí: đuôi :free / -free (OpenRouter, OpenCode Zen, TokenRouter) hoặc giá prompt+completion = 0
+    (OpenRouter trả `pricing`), hoặc cờ is_free/free trong dữ liệu provider."""
+    if model_id.endswith((":free", "-free")):
+        return True
+    if not isinstance(item, dict):
+        return False
+    for k in ("is_free", "free"):
+        if isinstance(item.get(k), bool):
+            return item[k]
+    pricing = item.get("pricing")
+    if isinstance(pricing, dict) and pricing:
+        try:
+            return all(float(pricing.get(k) or 0) == 0 for k in ("prompt", "completion"))
+        except (TypeError, ValueError):
+            return False
+    return False

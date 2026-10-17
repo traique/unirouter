@@ -128,6 +128,22 @@ async def catalog_models():
     return [{"id": "zeta-paid"}, {"id": "ok"}, {"id": "alpha-free"}]
 
 
+@app.get("/catalog/rich")
+async def catalog_rich():
+    """Kiểu OpenRouter: giá trong pricing, model miễn phí giá 0 hoặc đuôi :free; có model giọng nói."""
+    return {"data": [{"id": "or/paid", "pricing": {"prompt": "0.000001", "completion": "0.000002"}},
+                     {"id": "or/zero", "pricing": {"prompt": "0", "completion": "0"}},
+                     {"id": "or/gemma:free", "pricing": {"prompt": "0", "completion": "0"}},
+                     {"id": "or/whisper-free", "pricing": {"prompt": "0", "completion": "0"}},
+                     {"id": "ok"}]}
+
+
+@app.get("/catalog/plain")
+async def catalog_plain():
+    """Provider cả gói miễn phí (kiểu Groq): không đánh dấu gì, có model không phải chat."""
+    return {"data": [{"id": "p2"}, {"id": "p1"}, {"id": "tts-1"}, {"id": "ok"}]}
+
+
 def ev(d: dict) -> str:
     return f"event: {d['type']}\ndata: {json.dumps(d)}\n\n"
 

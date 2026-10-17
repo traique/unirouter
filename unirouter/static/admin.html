@@ -144,6 +144,7 @@ label.f{display:block;margin-bottom:15px}label.f>span{display:block;font-size:12
 .chip.auto{background:var(--accent-weak);border-color:var(--accent);color:var(--accent-ink)}
 .chip.auto::before{content:"auto";font-family:var(--sans);font-size:10px;font-weight:600;margin-right:5px;opacity:.8}
 .mchoice{display:flex;flex-direction:column;gap:8px;margin:14px 0 6px}.mchoice .btn{justify-content:flex-start}
+.chip-in{font-family:var(--mono);font-size:11.5px;line-height:20px;padding:0 7px;border:1px solid var(--accent);border-radius:5px;background:var(--panel2);color:var(--text);min-width:min(260px,70vw);outline:none}
 
 /* tables */
 .tbl{overflow-x:auto}
@@ -586,15 +587,51 @@ function addButtons(p, primary = true) {
     ? `<button class="btn sm ${primary ? "primary" : ""}" onclick="codexLogin('${p.id}')">Đăng nhập ChatGPT</button><button class="btn sm" onclick="codexImport('${p.id}')">Nhập auth.json</button>`
     : `<button class="btn sm ${primary ? "primary" : ""}" onclick="addKey('${p.id}')">${icon("plus")}Thêm key</button>`;
 }
+function modelTools(p) {
+  const hasConn = p.connections.some(c => c.enabled);
+  return `<span class="chip more" title="Thêm model bằng tay (khi app không tự lấy được)" onclick="addModelBox('${p.id}', this)">+ model</span>` +
+    (hasConn ? `<span class="chip more" title="Bổ sung model${p.free || p.type === "codex" ? "" : " miễn phí"} từ chính provider" onclick="syncModels('${p.id}')">↻ lấy model${p.free || p.type === "codex" ? "" : " free"}</span>` : "");
+}
 function modelChips(p, limit = 8) {
-  if (!p.models.length) return `<span class="muted" style="font-size:12.5px">Chưa có model, sẽ tự lấy khi thêm key</span>`;
+  if (!p.models.length) return `<span class="muted" style="font-size:12.5px;line-height:22px">Chưa có model${p.connections.length ? "" : ", sẽ tự lấy khi thêm key"}</span>` + modelTools(p);
   const auto = p.kinds?.chat;
   const shown = p.models.slice(0, limit).map(m => {
     const tip = [m === auto ? "Model dùng khi gọi \"auto\"" : "", p.latency[m] ? "TTFB ~" + p.latency[m] + " ms" : "", "Bấm để chọn"].filter(Boolean).join(" · ");
     return `<span class="chip pick ${m === auto ? "auto" : ""}" title="${esc(tip)}" data-m="${esc(m)}" onclick="modelMenu('${p.id}', this.dataset.m)">${esc(m)}</span>`;
   }).join("");
-  return shown + (p.models.length > limit ? `<span class="chip more" onclick="editProvider('${p.id}')">+${p.models.length - limit} model</span>` : "");
+  return shown + (p.models.length > limit ? `<span class="chip more" onclick="editProvider('${p.id}')">+${p.models.length - limit} model</span>` : "") + modelTools(p);
 }
+
+window.addModelBox = (pid, el) => {
+  const p = providers.find(x => x.id === pid);
+  const inp = document.createElement("input");
+  inp.className = "chip-in"; inp.placeholder = "tên model, Enter để thêm"; inp.autocomplete = "off"; inp.spellcheck = false;
+  el.replaceWith(inp); inp.focus();
+  let done = false;
+  const cancel = () => { if (done) return; done = true; loadProviders(); };
+  inp.onkeydown = run(async e => {
+    if (e.key === "Escape") return cancel();
+    if (e.key !== "Enter") return;
+    const names = inp.value.split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean);
+    const add = names.filter(m => !p.models.includes(m));
+    if (!names.length) return cancel();
+    if (!add.length) { toast("Model đã có trong danh sách"); return cancel(); }
+    done = true; inp.disabled = true;
+    await api("/admin/api/providers", { body: { id: pid, models: [...p.models, ...add] } });
+    toast(`Đã thêm ${add.join(", ")}`); loadProviders();
+  });
+  inp.onblur = () => setTimeout(() => { if (!inp.value.trim()) cancel(); }, 150);
+};
+
+window.syncModels = run(async (pid, mode = "free") => {
+  const p = providers.find(x => x.id === pid);
+  toast("Đang lấy danh sách model…");
+  const r = await api(`/admin/api/providers/${pid}/sync-models`, { body: { mode } });
+  if (r.added.length) toast(`Đã thêm ${r.added.length} model${mode === "free" && !p.free ? " miễn phí" : ""} vào ${p.name} (${r.models} model)`);
+  else if (r.note && mode === "free" && r.fetched && confirm(`${r.note.replace(/ Bấm.*$/, "")}\n\nThêm tất cả ${r.fetched} model lấy được?`)) return syncModels(pid, "all");
+  else toast(r.note || `Không có model mới (provider trả ${r.fetched} model, đã có đủ)`);
+  loadProviders();
+});
 
 function providerBlock(p) {
   const conns = p.connections.map(c => {
@@ -701,8 +738,9 @@ window.addKey = pid => {
         try {
           const r = await api(`/admin/api/providers/${pid}/connections`, { body: { label: $("#mkLabel").value, api_key: $("#mkKey").value } });
           closeModal();
-          if (r.test && r.test.ok) toast(`Đã thêm ${r.added} key, gọi thử thành công (${r.test.ms} ms)`);
-          else if (r.test) toast(`Đã thêm key nhưng gọi thử lỗi: ${r.test.error}`, true);
+          const extra = r.added_models ? `, bổ sung ${r.added_models} model` : "";
+          if (r.test && r.test.ok) toast(`Đã thêm ${r.added} key${extra}, gọi thử thành công (${r.test.ms} ms)`);
+          else if (r.test) toast(`Đã thêm key${extra} nhưng gọi thử lỗi: ${r.test.error}`, true);
           else toast(`Đã thêm ${r.added} key${r.error ? ", chưa lấy được model: " + r.error : ""}`, !!r.error);
           loadProviders();
         } finally { b.disabled = false; b.textContent = "Lưu và gọi thử"; }

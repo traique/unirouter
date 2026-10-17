@@ -225,6 +225,69 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text).strip("-")[:24] or "api"
 
 
+# Model không dùng cho chat/embeddings/ảnh (giọng nói, OCR, kiểm duyệt...) -> không tự thêm vào danh sách
+_SKIP_MODEL_HINTS = ("whisper", "tts", "veo", "moderation", "-ocr", "voxtral", "transcri", "realtime", "audio", "sora")
+
+
+def _auto_addable(model: str) -> bool:
+    m = model.lower()
+    return not any(h in m for h in _SKIP_MODEL_HINTS)
+
+
+async def sync_models(st, provider: dict[str, Any], conn: dict[str, Any], mode: str = "free") -> dict[str, Any]:
+    """Lấy danh sách model từ provider và bổ sung vào danh sách hiện có (không xóa model đang có).
+
+    mode "free": chỉ thêm model miễn phí. Provider đánh dấu miễn phí qua đuôi :free/-free hoặc giá = 0 thì
+    lấy đúng các model đó; provider mà cả gói đều miễn phí (Groq, Gemini, NVIDIA, GitHub Models...) hoặc
+    ChatGPT (backend trả đúng model tài khoản dùng được) thì lấy tất cả. Provider chưa có model nào cũng lấy tất cả.
+    mode "all": thêm mọi model lấy được.
+    """
+    pid = provider["id"]
+    items = await st.providers[provider["type"]].list_models_detailed(provider, conn)
+    existing = list(provider["models"])
+    free_marked = [it["id"] for it in items if it.get("free")]
+    all_ids = [it["id"] for it in items]
+    if mode == "all" or not existing:
+        picks = all_ids
+    elif free_marked:
+        picks = free_marked
+    elif provider.get("free") or provider["type"] == "codex":
+        picks = all_ids
+    else:
+        picks = []
+    have = set(existing)
+    added = [m for m in picks if m not in have and _auto_addable(m)]
+    if added:
+        st.store.upsert_provider({"id": pid, "models": existing + added})
+    return {"fetched": len(items), "free": len(free_marked), "added": added, "models": len(existing) + len(added)}
+
+
+@router.post("/admin/api/providers/{pid}/sync-models")
+async def sync_models_route(pid: str, request: Request):
+    """Nút "Lấy model" trong thẻ provider: bổ sung model (miễn phí) từ chính provider bằng key đầu tiên."""
+    require_admin(request)
+    st = S(request)
+    p = st.store.providers.get(pid)
+    if not p:
+        raise HTTPException(404, "Không có provider này")
+    conns = [c for c in st.store.provider_connections(pid) if c["enabled"]]
+    if not conns:
+        raise HTTPException(400, "Cần thêm ít nhất 1 tài khoản/API key trước")
+    data = await request.json() if (await request.body()) else {}
+    mode = "all" if data.get("mode") == "all" else "free"
+    conn = {**conns[0], "_secret": st.store.connection_secret(conns[0]["id"])}
+    try:
+        r = await sync_models(st, p, conn, mode)
+    except ProviderError as e:
+        raise HTTPException(502, f"Không lấy được danh sách model: {e.message}") from e
+    if not r["added"] and not r["fetched"]:
+        r["note"] = "Provider không trả về model nào."
+    elif not r["added"] and mode == "free" and not r["free"] and not p.get("free"):
+        r["note"] = (f"Provider trả về {r['fetched']} model nhưng không đánh dấu model nào miễn phí. "
+                     f"Bấm \"Lấy tất cả\" hoặc thêm từng model.")
+    return r
+
+
 @router.post("/admin/api/providers/quick")
 async def quick_provider(request: Request):
     """Thêm nhanh provider tương thích OpenAI: chỉ cần tên, base URL, model, API key."""
@@ -260,10 +323,8 @@ async def quick_provider(request: Request):
     error = None
     if not models:  # tự lấy danh sách model từ provider
         try:
-            models = await st.providers["openai"].list_models(st.store.providers[pid],
-                                                               {**conn, "_secret": {"api_key": api_key}})
-            if models:
-                st.store.upsert_provider({"id": pid, "models": models})
+            await sync_models(st, st.store.providers[pid], {**conn, "_secret": {"api_key": api_key}})
+            models = st.store.providers[pid]["models"]
         except ProviderError as e:
             error = e.message
         except Exception as e:  # noqa: BLE001
@@ -304,22 +365,21 @@ async def add_connection(pid: str, request: Request):
                                     priority=int(data.get("priority") or 0))
         first = first or c
     error = None
-    if not st.store.providers[pid]["models"]:  # provider chưa có model -> tự lấy bằng key vừa nhập
-        try:
-            models = await st.providers["openai"].list_models(st.store.providers[pid],
-                                                               {**first, "_secret": {"api_key": keys[0]}})
-            if models:
-                st.store.upsert_provider({"id": pid, "models": models})
-        except ProviderError as e:
-            error = e.message
-        except Exception as e:  # noqa: BLE001
-            error = str(e)
+    added_models: list[str] = []
+    # Tự lấy model bằng key vừa nhập: provider chưa có model thì lấy tất cả, đã có (preset) thì bổ sung model miễn phí
+    try:
+        added_models = (await sync_models(st, st.store.providers[pid], {**first, "_secret": {"api_key": keys[0]}}))["added"]
+    except ProviderError as e:
+        error = e.message
+    except Exception as e:  # noqa: BLE001
+        error = str(e)
     prov = st.store.providers[pid]
     test = None
     if prov["models"]:
         model = (prov.get("options") or {}).get("auto_model") or prov["models"][0]
         test = await run_test(st, prov, {**first, "_secret": {"api_key": keys[0]}}, model)
-    return {"ok": True, "added": len(keys), "models": len(prov["models"]), "error": error, "test": test}
+    return {"ok": True, "added": len(keys), "models": len(prov["models"]), "added_models": len(added_models),
+            "error": error, "test": test}
 
 
 @router.patch("/admin/api/connections/{cid}")
