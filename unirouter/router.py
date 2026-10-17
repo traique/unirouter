@@ -4,10 +4,12 @@
 - Nhiều tài khoản cho mỗi provider, xoay vòng hoặc dùng lần lượt
 - Circuit breaker + cooldown theo Retry-After / thời điểm reset hạn mức
 - Chỉ đổi provider khi CHƯA gửi dữ liệu nào cho client
+- Provider báo không còn hỗ trợ một model (scope "model"): bỏ model khỏi danh sách, "auto" thử model kế tiếp
 - Embeddings và tạo ảnh dùng chung cơ chế chọn đích/fallback (Router.call)
 """
 from __future__ import annotations
 
+import logging
 import random
 import time
 from collections.abc import AsyncIterator
@@ -16,9 +18,12 @@ from typing import Any
 
 from .health import Health
 from .providers.base import CallContext, Event, Provider, ProviderError, Target, model_kind
+from .providers.catalog import codex_base_model
 
 
 AUTO_MODEL = "auto"
+MAX_MODEL_SWAPS = 8  # số lần tối đa một request được đổi sang model kế tiếp của cùng provider
+log = logging.getLogger("unirouter.router")
 
 
 class GatewayError(Exception):
@@ -58,9 +63,9 @@ class Router:
         self.health = health
 
     # ------------------------------------------------------------ resolution
-    def _target(self, pid: str, model: str) -> Target:
+    def _target(self, pid: str, model: str, auto: bool = False) -> Target:
         p = self.store.providers[pid]
-        return Target(p, model, f"{p['alias']}/{model}")
+        return Target(p, model, f"{p['alias']}/{model}", auto)
 
     def resolve(self, name: str, _depth: int = 0, allow_default: bool = True,
                 kind: str = "chat") -> tuple[list[Target], str]:
@@ -120,7 +125,7 @@ class Router:
         if _depth == 0 and allow_default and store.setting("unknown_model_fallback") and default.lower() != name.lower():
             return self.resolve(default, 1)
         raise GatewayError(404, f"Không tìm thấy model hoặc combo '{name}'. Dùng dạng provider/model "
-                                f"(vd: cx/gpt-5.5) hoặc tạo combo trong /admin.")
+                                f"(vd: cx/gpt-5.6-sol) hoặc tạo combo trong /admin.")
 
     @staticmethod
     def kind_model(p: dict[str, Any], kind: str) -> str | None:
@@ -151,7 +156,7 @@ class Router:
                 continue
             model = self.kind_model(p, kind)
             if model:
-                out.append(self._target(pid, model))
+                out.append(self._target(pid, model, auto=True))
         if kind == "images":  # tạo ảnh qua ChatGPT là thử nghiệm -> để cuối
             out.sort(key=lambda t: t.provider["type"] == "codex")
         return out
@@ -188,11 +193,14 @@ class Router:
     async def open(self, ctx: CallContext, requested: str, allow_default: bool = True) -> Stream:
         # Key bị giới hạn model không được "lách" sang model mặc định
         targets, _ = self.resolve(requested, allow_default=allow_default)
+        queue = list(targets)
         attempts: list[dict[str, Any]] = []
         last: ProviderError | None = None
         waits: list[float] = []
+        swaps = 0
 
-        for target in targets:
+        while queue:
+            target = queue.pop(0)
             provider = target.provider
             if not provider["enabled"]:
                 attempts.append({"target": target.label, "error": "provider đang tắt"})
@@ -233,6 +241,11 @@ class Router:
                         raise GatewayError(err.status, err.message, attempts) from err
                     if err.scope == "account":
                         continue  # thử tài khoản khác của cùng provider
+                    if err.scope == "model":
+                        nxt = self._replace_model(target, err, "chat")
+                        if nxt is not None and swaps < MAX_MODEL_SWAPS:
+                            swaps += 1
+                            queue.insert(0, nxt)  # cùng provider, model kế tiếp
                     break  # thử đích tiếp theo
                 except Exception as e:  # lỗi lạ: không để sập cả request
                     err = ProviderError(502, f"{type(e).__name__}: {e}")
@@ -259,10 +272,13 @@ class Router:
                    allow_default: bool = True) -> tuple[dict[str, Any], Target, dict[str, Any], list[dict[str, Any]], int]:
         """Gọi endpoint một lần (embeddings / tạo ảnh) với cùng cơ chế chọn đích, xoay tài khoản và fallback."""
         targets, _ = self.resolve(requested, allow_default=allow_default, kind=kind)
+        queue = list(targets)
         attempts: list[dict[str, Any]] = []
         last: ProviderError | None = None
         waits: list[float] = []
-        for target in targets:
+        swaps = 0
+        while queue:
+            target = queue.pop(0)
             provider = target.provider
             impl = self.impls.get(provider["type"])
             if not provider["enabled"] or impl is None:
@@ -291,6 +307,11 @@ class Router:
                         raise GatewayError(err.status, err.message, attempts) from err
                     if err.scope == "account":
                         continue
+                    if err.scope == "model":
+                        nxt = self._replace_model(target, err, kind)
+                        if nxt is not None and swaps < MAX_MODEL_SWAPS:
+                            swaps += 1
+                            queue.insert(0, nxt)
                     break
                 except Exception as e:  # noqa: BLE001 - lỗi lạ (thường do dữ liệu request): không phạt tài khoản
                     err = ProviderError(502, f"{type(e).__name__}: {e}")
@@ -312,6 +333,44 @@ class Router:
         msg = (f"Tất cả {len(attempts)} lượt thử đều lỗi. Lỗi cuối ({attempts[-1]['target']}): {last.message}"
                if len(attempts) > 1 else last.message)
         raise GatewayError(status, msg, attempts)
+
+    def _replace_model(self, target: Target, err: ProviderError, kind: str) -> Target | None:
+        """Provider không còn hỗ trợ model (vd ChatGPT ngừng gpt-5.5): bỏ model khỏi danh sách provider.
+
+        So khớp theo tên gốc (bỏ hậu tố effort với ChatGPT) nên "gpt-5.5-high" cũng bị bỏ khi backend báo
+        "gpt-5.5". Trả về đích thay thế khi model hỏng không phải thứ client chỉ định đích danh: đích do
+        "auto" chọn, hoặc tạo ảnh qua ChatGPT (model chat do provider tự chọn). Nhiều request đồng thời cùng
+        dính một model: request đến sau thấy danh sách đã sạch (không đổi gì) vẫn được chuyển sang model kế
+        tiếp. Vòng thử bị chặn bởi MAX_MODEL_SWAPS ở nơi gọi.
+        """
+        pid = target.provider["id"]
+        p = self.store.providers.get(pid)
+        if p is None:
+            return None
+        base = codex_base_model if p["type"] == "codex" else (lambda m: m)
+        gone = base(err.model or target.model)
+        models = [m for m in p["models"] if base(m) != gone]
+        opts = dict(p.get("options") or {})
+        changed = len(models) != len(p["models"])
+        for k in ("auto_model", "image_chat_model"):
+            if isinstance(opts.get(k), str) and base(opts[k]) == gone:
+                opts.pop(k)
+                changed = True
+        if changed:
+            try:
+                p = self.store.upsert_provider({"id": pid, "models": models, "options": opts})
+            except Exception:  # noqa: BLE001 - không lưu được thì vẫn trả lỗi bình thường
+                return None
+            log.warning("%s từ chối model '%s' ([%s] %s) → đã bỏ khỏi danh sách model của provider",
+                        p["name"], gone, err.status, err.message[:200])
+        if not target.auto and base(target.model) == gone:
+            return None  # client gọi đích danh model này: trả lỗi, không tự đổi sang model khác
+        model = self.kind_model(p, kind)
+        if not model or base(model) == gone:
+            return None
+        if model == target.model and not changed:
+            return None  # không có gì mới để thử
+        return self._target(pid, model, auto=target.auto)
 
     def _fail(self, target: Target, conn: dict[str, Any], err: ProviderError, started: float,
               attempts: list[dict[str, Any]]) -> None:

@@ -84,10 +84,12 @@ docker run -d -p 20128:20128 -v $PWD/data:/app/data \
 
 ## Bắt đầu trong trang quản trị
 
-1. **Providers:** chọn một provider trong mục *Thêm nhanh*, bấm **Lấy key** để đăng ký (đa số miễn phí), dán key vào. App tự lấy danh sách model và gọi thử. Có thể dán nhiều key, mỗi dòng một key, để xoay vòng.
+1. **Providers:** chọn một provider trong mục *Thêm nhanh*, bấm **Lấy key** để đăng ký (đa số miễn phí), dán key vào. Với mọi provider, app tự lấy danh sách model từ chính provider và gọi thử: provider có đánh dấu model miễn phí (đuôi `:free`/`-free` hoặc giá 0, như OpenRouter, OpenCode Zen) thì chỉ thêm các model đó; provider không đánh dấu (Groq, Gemini, NVIDIA, DeepSeek, GitHub Models, provider tùy chỉnh…) thì thêm tất cả. Bấm **↻ lấy model** trong thẻ provider để lấy lại bất cứ lúc nào (với ChatGPT là danh sách model tài khoản được dùng); nếu còn model trả phí chưa thêm, app sẽ hỏi. Có thể dán nhiều key, mỗi dòng một key, để xoay vòng.
 2. **ChatGPT:** bấm **Đăng nhập ChatGPT**, mở link và nhập mã. Nếu máy chủ bị chặn khi đăng nhập, chạy `codex login` trên máy bạn rồi dán nội dung `~/.codex/auth.json` vào **Nhập auth.json**.
 3. **API Keys:** tạo một key `sk-uni-…` cho mỗi bot hoặc công cụ.
 4. Gọi model `auto`. Phần **Cài đặt → Kết nối client** có sẵn cấu hình mẫu để copy.
+
+Bấm vào một chip model trong thẻ provider để chọn nhanh: đặt làm model cho `auto`, gọi thử, copy tên hoặc bỏ khỏi danh sách. Chip có nhãn `auto` là model provider đó đang dùng khi gọi `auto`. Mọi provider đều có nút **+ model** để gõ tay tên model (cách nhau bằng dấu phẩy) khi app không tự lấy được, kể cả provider chưa có key; provider đã có key còn có **↻ lấy model** để lấy lại danh sách từ provider bất cứ lúc nào.
 
 Provider không có trong danh sách: bấm **Provider tùy chỉnh**, nhập tên, Base URL, API key. Header và các tùy chọn tương thích được tự xử lý.
 
@@ -111,11 +113,11 @@ curl https://ai.example.com/v1/chat/completions \
 | Cách gọi | Ví dụ | Nghĩa |
 |---|---|---|
 | `auto` | `auto` | Mọi provider đang có key, thử lần lượt |
-| `tiền_tố/model` | `cx/gpt-5.5`, `groq/openai/gpt-oss-120b` | Đúng model đó của đúng provider |
+| `tiền_tố/model` | `cx/gpt-5.6-sol`, `groq/openai/gpt-oss-120b` | Đúng model đó của đúng provider |
 | tên combo | `gpt-4o`, `fast` | Danh sách model bạn tự định nghĩa |
 | tên model trần | `deepseek-chat` | Provider nào có model đó |
 
-Với ChatGPT, thêm hậu tố `-low`, `-medium`, `-high`, `-xhigh` để chọn mức suy luận, ví dụ `cx/gpt-5.5-high`. Client gửi tên model không tồn tại (vd `gpt-4o`, `claude-…`) sẽ tự chạy qua model mặc định, trừ khi bạn tắt trong Cài đặt.
+Với ChatGPT, thêm hậu tố `-low`, `-medium`, `-high`, `-xhigh` để chọn mức suy luận, ví dụ `cx/gpt-5.6-sol-high`. Client gửi tên model không tồn tại (vd `gpt-4o`, `claude-…`) sẽ tự chạy qua model mặc định, trừ khi bạn tắt trong Cài đặt.
 
 ### Embeddings
 
@@ -156,6 +158,7 @@ curl https://ai.example.com/v1/images/generations -H "Authorization: Bearer sk-u
 | 429, 401, 403, hết hạn mức | Tạm khóa key đó (theo Retry-After hoặc thời điểm reset), thử key khác cùng provider, rồi tới nguồn kế tiếp |
 | 5xx, timeout, lỗi mạng | Thử nguồn kế tiếp. Lỗi liên tiếp vượt ngưỡng thì nguồn đó nghỉ một lúc |
 | Model không tồn tại, vượt context | Thử nguồn kế tiếp |
+| ChatGPT báo model không còn hỗ trợ (`model is not supported`) | Bỏ model đó khỏi danh sách của provider; `auto` thử ngay model ChatGPT kế tiếp |
 | Request sai tham số | Trả lỗi ngay cho client |
 | Lỗi giữa lúc đang stream | Báo lỗi trong stream, không ghép câu trả lời từ hai model |
 

@@ -17,7 +17,7 @@ from typing import Any
 from cryptography.fernet import Fernet, InvalidToken
 
 from . import config
-from .providers.catalog import PRESETS
+from .providers.catalog import CODEX_RETIRED_MODELS, PRESETS, codex_base_model
 
 PRESET_BY_ID = {p["id"]: p for p in PRESETS}
 
@@ -180,6 +180,21 @@ class Store:
             )
         for k, v in DEFAULT_SETTINGS.items():
             self.x("INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)", (k, json.dumps(v)))
+        self._retire_codex_models()
+
+    def _retire_codex_models(self) -> None:
+        """Bỏ model ChatGPT đã bị OpenAI ngừng hỗ trợ khỏi DB cũ, để "auto" không chọn lại rồi lỗi 400."""
+        for r in self.q("SELECT id, models, options FROM providers WHERE type='codex'"):
+            models = json.loads(r["models"])
+            opts = json.loads(r["options"])
+            kept = [m for m in models if codex_base_model(m) not in CODEX_RETIRED_MODELS]
+            changed = len(kept) != len(models)
+            for k in ("auto_model", "image_chat_model"):
+                if isinstance(opts.get(k), str) and codex_base_model(opts[k]) in CODEX_RETIRED_MODELS:
+                    opts.pop(k)
+                    changed = True
+            if changed:
+                self.x("UPDATE providers SET models=?, options=? WHERE id=?", (json.dumps(kept), json.dumps(opts), r["id"]))
 
     # ------------------------------------------------------------------ cache
     def reload(self) -> None:

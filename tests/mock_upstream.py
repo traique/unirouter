@@ -128,6 +128,25 @@ async def catalog_models():
     return [{"id": "zeta-paid"}, {"id": "ok"}, {"id": "alpha-free"}]
 
 
+@app.get("/catalog/rich")
+async def catalog_rich():
+    """Kiểu OpenRouter: giá trong pricing, model miễn phí giá 0 hoặc đuôi :free; có model giọng nói."""
+    return {"data": [{"id": "or/paid", "pricing": {"prompt": "0.000001", "completion": "0.000002"}},
+                     {"id": "or/zero", "pricing": {"prompt": "0", "completion": "0"}},
+                     {"id": "or/gemma:free", "pricing": {"prompt": "0", "completion": "0"}},
+                     {"id": "or/whisper-free", "pricing": {"prompt": "0", "completion": "0"}},
+                     {"id": "or/lyria-audio", "pricing": {"prompt": "0", "completion": "0"},
+                      "architecture": {"output_modalities": ["audio"]}},
+                     {"id": "tg/input-output", "pricing": {"input": "0.5", "output": "1.5"}},
+                     {"id": "ok"}]}
+
+
+@app.get("/catalog/plain")
+async def catalog_plain():
+    """Provider cả gói miễn phí (kiểu Groq): không đánh dấu gì, có model không phải chat."""
+    return {"data": [{"id": "p2"}, {"id": "p1"}, {"id": "tts-1"}, {"id": "ok"}]}
+
+
 def ev(d: dict) -> str:
     return f"event: {d['type']}\ndata: {json.dumps(d)}\n\n"
 
@@ -143,6 +162,13 @@ async def codex(request: Request):
     if model == "gpt-limit":
         return JSONResponse({"error": {"type": "usage_limit_reached", "message": "limit",
                                        "resets_in_seconds": 1200}}, 429)
+    if model == "gpt-gone":
+        return JSONResponse({"error": {"type": "invalid_request_error", "code": "unsupported_model", "message":
+                                       f"The '{model}' model is not supported when using Codex with a ChatGPT account."}},
+                            400)
+    if model == "gpt-badparam":  # lỗi tham số request: có chữ "model" + "not supported" nhưng KHÔNG phải model hỏng
+        return JSONResponse({"error": {"type": "invalid_request_error", "code": "unsupported_parameter", "param": "text.verbosity",
+                                       "message": "Unsupported parameter: 'text.verbosity' is not supported with this model."}}, 400)
 
     async def gen():
         yield ev({"type": "response.created", "response": {"id": "resp_1", "status": "in_progress"}})
@@ -181,6 +207,14 @@ async def codex(request: Request):
                                                              "usage": {"input_tokens": 20, "output_tokens": 4}}})
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@app.get("/codex/models")
+async def codex_models(request: Request):
+    calls["codex-models"] = calls.get("codex-models", 0) + 1
+    if not request.headers.get("authorization", "").startswith("Bearer ey"):
+        return JSONResponse({"detail": "Unauthorized"}, 401)
+    return {"models": [{"slug": "gpt-ok"}, {"slug": "gpt-new-b"}, {"slug": "gpt-new-a"}]}
 
 
 @app.post("/auth/oauth/token")

@@ -2,6 +2,7 @@
 
 - Header giống Codex CLI, chỉ giữ các field backend chấp nhận, chế độ "responses lite"
 - Reasoning effort qua hậu tố model (-low, -high...), usage_limit_reached -> khóa tài khoản đến lúc reset
+- Model bị backend từ chối ("model is not supported") -> báo scope "model" để router bỏ model, thử model kế tiếp
 - curl_cffi giả lập trình duyệt, tự retry 1 lần khi server quá tải trước khi có output
 """
 from __future__ import annotations
@@ -11,6 +12,7 @@ import base64
 import hashlib
 import ipaddress
 import json
+import re
 import time
 from collections.abc import AsyncIterator
 from typing import Any
@@ -19,10 +21,15 @@ from .. import http
 from ..formats.responses import chat_to_responses
 from . import codex_auth
 from .base import CallContext, Event, Provider, ProviderError, Target, classify_http
+from .catalog import CODEX_EFFORTS
 
 ALLOWED_FIELDS = {"model", "input", "instructions", "tools", "tool_choice", "stream", "store", "reasoning",
                   "service_tier", "include", "prompt_cache_key", "text", "parallel_tool_calls"}
-EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh")
+EFFORTS = CODEX_EFFORTS
+# 400 báo model không còn dùng được với tài khoản ChatGPT, vd:
+# "The 'gpt-5.5' model is not supported when using Codex with a ChatGPT account."
+RE_UNSUPPORTED_MODEL = re.compile(r"['\"`]([A-Za-z0-9._:/-]+)['\"`]\s+model\s+is\s+not\s+supported", re.I)
+UNSUPPORTED_MODEL_CODES = ("unsupported_model", "model_not_supported", "model_not_found", "model_unavailable")
 TRANSIENT = ("server_is_overloaded", "service_unavailable", "overloaded", "server_error", "internal_error")
 CAPACITY = ("model_at_capacity", "selected model is at capacity")
 LIFECYCLE = {"response.created", "response.in_progress", "response.queued"}
@@ -213,6 +220,23 @@ def chat_to_codex(provider: dict[str, Any], model: str, body: dict[str, Any]) ->
     return finalize_payload(provider, payload, body.get("reasoning_effort"))
 
 
+def unsupported_model(err: dict[str, Any], msg: str, model: str = "") -> str | None:
+    """Trả về tên model nếu lỗi 400 nói đúng *model này* không được hỗ trợ; None với mọi 400 khác.
+
+    Chỉ nhận mẫu "'X' model is not supported" với X trùng model đang gọi (hoặc error.code báo rõ
+    unsupported_model). Các câu "Unsupported parameter ... with this model", "Image input is not
+    supported for this model" là lỗi tham số request, không được coi là model hỏng.
+    """
+    m = RE_UNSUPPORTED_MODEL.search(msg or "")
+    named = m.group(1) if m else None
+    code = str(err.get("code") or "").lower()
+    if named and (not model or named == model):
+        return named
+    if code in UNSUPPORTED_MODEL_CODES and model:
+        return model
+    return None
+
+
 def _event_error(event: dict[str, Any]) -> tuple[str, str]:
     err = event.get("error")
     resp = event.get("response")
@@ -261,18 +285,20 @@ class CodexProvider(Provider):
             if resp.status_code >= 400:
                 raw = await resp.acontent()
                 await codex_auth.abort_response(resp)
-                raise self._http_error(resp.status_code, raw, resp.headers)
+                raise self._http_error(resp.status_code, raw, resp.headers, str(payload.get("model") or ""))
             return resp
         raise ProviderError(401, "ChatGPT từ chối token", "account", 300)
 
     @staticmethod
-    def _http_error(status: int, raw: bytes, headers: Any) -> ProviderError:
+    def _http_error(status: int, raw: bytes, headers: Any, model: str = "") -> ProviderError:
         msg = http.error_message(raw, status)
-        if status == 429:
-            try:
-                err = json.loads(raw).get("error") or {}
-            except (ValueError, AttributeError):
+        try:
+            err = json.loads(raw).get("error") or {}
+            if not isinstance(err, dict):
                 err = {}
+        except (ValueError, AttributeError):
+            err = {}
+        if status == 429:
             if err.get("type") == "usage_limit_reached" or "usage_limit" in msg.lower():
                 cooldown = 3600.0
                 if isinstance(err.get("resets_at"), (int, float)) and err["resets_at"] > time.time():
@@ -280,8 +306,12 @@ class CodexProvider(Provider):
                 elif isinstance(err.get("resets_in_seconds"), (int, float)):
                     cooldown = float(err["resets_in_seconds"])
                 return ProviderError(429, f"Hết hạn mức ChatGPT: {msg}", "account", max(cooldown, 60))
-        if status == 400 and "model" in msg.lower() and "not supported" in msg.lower():
-            return ProviderError(400, msg, "target")
+        if status == 400:
+            gone = unsupported_model(err, msg, model)
+            if gone:
+                # Model không còn dùng được với tài khoản ChatGPT (không phải lỗi tham số request):
+                # scope "model" để router bỏ model khỏi provider và "auto" chuyển sang model kế tiếp.
+                return ProviderError(400, msg, "model", model=gone)
         return classify_http(status, msg, http.retry_after(headers))
 
     async def open(self, target: Target, connection: dict[str, Any], ctx: CallContext) -> AsyncIterator[Event]:
@@ -494,7 +524,8 @@ class CodexProvider(Provider):
         return {"created": int(time.time()), "data": images,
                 "usage": {"input_tokens": usage["input"], "output_tokens": usage["output"]}}
 
-    async def list_models(self, provider: dict[str, Any], connection: dict[str, Any]) -> list[str]:
+    async def list_models_detailed(self, provider: dict[str, Any], connection: dict[str, Any]) -> list[dict[str, Any]]:
+        """Danh sách model backend Codex cho phép tài khoản này dùng (dùng cho "Lấy model" và sync_models)."""
         access, account_id = await codex_auth.ensure_access_token(self.store, connection)
         url = provider["base_url"].rsplit("/responses", 1)[0] + "/models?client_version=" + codex_auth.CODEX_VERSION
         headers = {"Authorization": f"Bearer {access}", "originator": "codex_cli_rs",
@@ -505,6 +536,6 @@ class CodexProvider(Provider):
         if resp.status_code >= 400:
             raise self._http_error(resp.status_code, resp.content, resp.headers)
         data = resp.json()
-        items = data.get("models") or data.get("data") or []
-        ids = [m.get("slug") or m.get("id") for m in items if isinstance(m, dict)]
-        return sorted({i for i in ids if i})
+        items = (data.get("models") or data.get("data") or []) if isinstance(data, dict) else data
+        ids = [m.get("slug") or m.get("id") for m in items or [] if isinstance(m, dict)]
+        return [{"id": i, "free": False} for i in sorted({str(i).strip() for i in ids if i and str(i).strip()})]

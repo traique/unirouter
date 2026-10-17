@@ -1,5 +1,6 @@
-import time
+import contextlib
 import json
+import time
 
 import anthropic
 import httpx
@@ -297,6 +298,7 @@ def test_admin_flow(env):
         provs = c.get("/admin/api/providers").json()["data"]
         mock = next(p for p in provs if p["id"] == "mock")
         assert mock["connections"][0]["key_hint"] == "••••"
+        assert mock["kinds"]["chat"] == "ok"  # model "auto" hiện tại, trang admin tô nổi chip này
         assert c.post("/admin/api/keys", json={"name": "x"}).status_code == 403  # thiếu header CSRF
         key = c.post("/admin/api/keys", json={"name": "x", "rpm": 5}, headers=h).json()["key"]
         assert key.startswith("sk-uni-")
@@ -697,3 +699,191 @@ def test_expired_image_not_served(env):
     os.utime(images.DIR / name, (old, old))
     assert images.path_of(name) is None
     assert httpx.get(env["base"] + f"/v1/images/files/{name}").status_code == 404
+
+
+# ------------------------------------------------------------------ ChatGPT ngừng hỗ trợ model
+def test_codex_unsupported_model_dropped_and_auto_moves_on(env):
+    """ChatGPT trả 400 "model is not supported": bỏ model khỏi provider, auto thử ngay model kế tiếp,
+    tài khoản không bị tạm khóa."""
+    st, mock = env["st"], env["mock"]
+    p = st.store.providers["codex"]
+    saved_models, saved_opts = list(p["models"]), dict(p["options"])
+    cid = next(c["id"] for c in st.store.connections.values() if c["label"] == "chatgpt-1")
+    st.store.upsert_provider({"id": "codex", "models": ["gpt-gone", *saved_models],
+                              "options": {**saved_opts, "auto_model": "gpt-gone"}})
+    for c in st.store.connections.values():
+        st.health.reset(c["id"])
+    try:
+        assert st.router.resolve("auto")[0][0].label == "cx/gpt-gone"
+        before = mock.calls.get("codex:gpt-gone", 0)
+        r = httpx.post(env["base"] + "/v1/chat/completions", headers={"Authorization": "Bearer master-test"},
+                       json={"model": "auto", "messages": [{"role": "user", "content": "hi"}]})
+        assert r.status_code == 200 and r.headers["x-unirouter-target"] == "cx/gpt-ok"
+        assert r.json()["choices"][0]["message"]["content"] == "Xin chào"
+        assert mock.calls["codex:gpt-gone"] == before + 1
+        p = st.store.providers["codex"]
+        assert "gpt-gone" not in p["models"] and "auto_model" not in p["options"]
+        assert st.health.available(cid) and st.health.conn(cid).failures == 0
+        assert st.router.resolve("auto")[0][0].label == "cx/gpt-ok"
+        # Client chỉ định đúng model đó: trả lỗi 400 của ChatGPT, không tự đổi model, không khóa tài khoản
+        r = httpx.post(env["base"] + "/v1/chat/completions", headers={"Authorization": "Bearer master-test"},
+                       json={"model": "cx/gpt-gone-high", "messages": [{"role": "user", "content": "hi"}]})
+        assert r.status_code == 400 and "not supported" in r.json()["error"]["message"]
+        assert st.health.available(cid)
+        # Model đã bị bỏ khỏi /v1/models
+        assert "cx/gpt-gone" not in [m.id for m in oa(env).models.list()]
+    finally:
+        st.store.upsert_provider({"id": "codex", "models": saved_models, "options": saved_opts})
+
+
+def test_seed_retires_codex_models():
+    import json
+    import sqlite3
+    import tempfile
+    from unirouter.db import Store
+    path = tempfile.mktemp(suffix=".db")
+    Store(path)
+    con = sqlite3.connect(path)
+    con.execute("UPDATE providers SET models=?, options=? WHERE id='codex'",
+                (json.dumps(["gpt-5.5", "gpt-5.5-high", "gpt-5.6-sol"]), json.dumps({"auto_model": "gpt-5.5-xhigh", "default_effort": "low"})))
+    con.commit()
+    con.close()
+    st = Store(path)
+    p = st.providers["codex"]
+    assert p["models"] == ["gpt-5.6-sol"]
+    assert "auto_model" not in p["options"] and p["options"]["default_effort"] == "low"
+
+
+# ------------------------------------------------------------------ bổ sung model miễn phí
+@contextlib.contextmanager
+def _admin(env):
+    with httpx.Client(base_url=env["base"], headers={"X-Requested-With": "unirouter"}) as c:
+        c.post("/admin/api/login", json={"username": "admin", "password": "pw"})
+        yield c
+
+
+def test_free_model_detection_by_pricing(env):
+    st = env["st"]
+    st.store.upsert_provider({"id": "richp", "alias": "rp", "name": "Rich", "type": "openai", "base_url": env["up"] + "/oai/v1",
+                              "models": ["ok"], "options": {"models_url": env["up"] + "/catalog/rich"}})
+    try:
+        with _admin(env) as c:
+            # provider đã có model (như preset) -> thêm key chỉ bổ sung model miễn phí, bỏ model giọng nói/audio-only
+            r = c.post("/admin/api/providers/richp/connections", json={"api_key": "good"}).json()
+            assert r["added_models"] == 2 and r["test"]["ok"]
+            assert st.store.providers["richp"]["models"] == ["ok", "or/gemma:free", "or/zero"]
+            # gọi lại: không thêm trùng, báo còn 1 model trả phí chưa thêm (pricing input/output không rõ -> không free)
+            r = c.post("/admin/api/providers/richp/sync-models", json={"mode": "free"}).json()
+            assert r["added"] == [] and r["fetched"] == 6 and r["free"] == 3 and r["paid_left"] == 2 and r["free_only"]
+            # lấy tất cả: thêm nốt model trả phí, vẫn bỏ whisper
+            r = c.post("/admin/api/providers/richp/sync-models", json={"mode": "all"}).json()
+            assert r["added"] == ["or/paid", "tg/input-output"] and r["paid_left"] == 0 and not r["free_only"]
+            # fetch-models (hộp Sửa) vẫn trả đủ, miễn phí xếp trước, model audio-only bị loại
+            got = c.post("/admin/api/providers/richp/fetch-models").json()["models"]
+            assert got[:3] == ["or/gemma:free", "or/whisper-free", "or/zero"] and "or/lyria-audio" not in got
+            # provider không tới được -> 502 có thông điệp, không phải 500
+            st.store.upsert_provider({"id": "richp", "options": {"models_url": "http://127.0.0.1:9/nope"}})
+            r = c.post("/admin/api/providers/richp/sync-models", json={})
+            assert r.status_code == 502 and "Không lấy được" in r.json()["detail"]
+    finally:
+        st.store.delete_provider("richp")
+
+
+def test_sync_models_unmarked_provider_takes_all(env):
+    """Provider không đánh dấu model miễn phí (Groq, DeepSeek, provider tùy chỉnh...) -> lấy tất cả model chat."""
+    st = env["st"]
+    groq = st.store.providers["groq"]
+    saved = {"base_url": groq["base_url"], "models": list(groq["models"]), "options": dict(groq["options"])}
+    st.store.upsert_provider({"id": "groq", "base_url": env["up"] + "/oai/v1",
+                              "options": {**saved["options"], "models_url": env["up"] + "/catalog/plain"}})
+    try:
+        with _admin(env) as c:
+            r = c.post("/admin/api/providers/groq/connections", json={"api_key": "good"}).json()
+            assert r["added_models"] == 3
+            assert st.store.providers["groq"]["models"] == [*saved["models"], "ok", "p1", "p2"]
+            assert st.store.providers["groq"]["models"][0] == saved["models"][0]  # giữ thứ tự ưu tiên của preset
+            # provider tùy chỉnh (không free, không đánh dấu) cũng lấy tất cả, bỏ model giọng nói
+            st.store.upsert_provider({"id": "plainp", "alias": "pp", "name": "Plain", "type": "openai", "models": ["ok"],
+                                      "base_url": env["up"] + "/oai/v1", "options": {"models_url": env["up"] + "/catalog/plain"}})
+            st.store.add_connection("plainp", "k", {"api_key": "good"})
+            r = c.post("/admin/api/providers/plainp/sync-models", json={}).json()
+            assert r["added"] == ["p1", "p2"] and r["paid_left"] == 0 and not r["free_only"]
+            assert st.store.providers["plainp"]["models"] == ["ok", "p1", "p2"]
+            assert c.post("/admin/api/providers/nope/sync-models", json={}).status_code == 404
+    finally:
+        for cid in [c["id"] for c in st.store.provider_connections("groq")]:
+            st.store.delete_connection(cid)
+        st.store.upsert_provider({"id": "groq", **saved})
+        if "plainp" in st.store.providers:
+            st.store.delete_provider("plainp")
+
+
+def test_sync_models_codex_calls_backend(env):
+    """Nút "↻ lấy model" với ChatGPT phải gọi /models của backend Codex (không phải trả lại danh sách đang có)."""
+    st, mock = env["st"], env["mock"]
+    saved = list(st.store.providers["codex"]["models"])
+    try:
+        with _admin(env) as c:
+            before = mock.calls.get("codex-models", 0)
+            r = c.post("/admin/api/providers/codex/sync-models", json={}).json()
+            assert mock.calls["codex-models"] == before + 1
+            assert r["added"] == ["gpt-new-a", "gpt-new-b"] and r["fetched"] == 3
+            assert st.store.providers["codex"]["models"] == [*saved, "gpt-new-a", "gpt-new-b"]
+            assert c.post("/admin/api/providers/codex/fetch-models").json()["models"] == ["gpt-new-a", "gpt-new-b", "gpt-ok"]
+    finally:
+        st.store.upsert_provider({"id": "codex", "models": saved})
+
+
+def test_codex_param_error_does_not_drop_model(env):
+    """400 lỗi tham số có chữ "model" + "not supported" KHÔNG được coi là model hỏng: không xóa model, không khóa tài khoản."""
+    st = env["st"]
+    saved = list(st.store.providers["codex"]["models"])
+    cid = next(c["id"] for c in st.store.connections.values() if c["label"] == "chatgpt-1")
+    st.store.upsert_provider({"id": "codex", "models": [*saved, "gpt-badparam"]})
+    try:
+        r = httpx.post(env["base"] + "/v1/chat/completions", headers={"Authorization": "Bearer master-test"},
+                       json={"model": "cx/gpt-badparam", "messages": [{"role": "user", "content": "hi"}]})
+        assert r.status_code == 400 and "text.verbosity" in r.json()["error"]["message"]
+        assert "gpt-badparam" in st.store.providers["codex"]["models"]
+        assert st.health.available(cid)
+        from unirouter.providers.codex import unsupported_model
+        assert unsupported_model({"code": "unsupported_parameter"}, "Image input is not supported for this model.", "gpt-x") is None
+        assert unsupported_model({}, "The 'gpt-5.5' model is not supported when using Codex with a ChatGPT account.", "gpt-5.5") == "gpt-5.5"
+        assert unsupported_model({}, "The 'gpt-5.5' model is not supported ...", "gpt-6") is None  # nói về model khác
+        assert unsupported_model({"code": "unsupported_model"}, "nope", "gpt-6") == "gpt-6"
+    finally:
+        st.store.upsert_provider({"id": "codex", "models": saved})
+
+
+def test_codex_unsupported_model_effort_suffix_and_explicit_image(env):
+    """Danh sách/auto_model có hậu tố effort vẫn được dọn; tạo ảnh với đích chỉ định cx/gpt-image thành công ngay dù model chat
+    đầu tiên bị từ chối; request đến sau (race) vẫn được chuyển model."""
+    st = env["st"]
+    p = st.store.providers["codex"]
+    saved_models, saved_opts = list(p["models"]), dict(p["options"])
+    for c in st.store.connections.values():
+        st.health.reset(c["id"])
+    try:
+        st.store.upsert_provider({"id": "codex", "models": ["gpt-gone-high", *saved_models],
+                                  "options": {**saved_opts, "auto_model": "gpt-gone-high"}})
+        r = httpx.post(env["base"] + "/v1/chat/completions", headers={"Authorization": "Bearer master-test"},
+                       json={"model": "auto", "messages": [{"role": "user", "content": "hi"}]})
+        assert r.status_code == 200 and r.headers["x-unirouter-target"] == "cx/gpt-ok"
+        p = st.store.providers["codex"]
+        assert "gpt-gone-high" not in p["models"] and "auto_model" not in p["options"]
+        # tạo ảnh: client chỉ định cx/gpt-image, model chat do provider tự chọn bị từ chối -> tự chọn model kế tiếp
+        st.store.upsert_provider({"id": "codex", "models": ["gpt-gone", *saved_models], "options": {**saved_opts, "auto_model": "gpt-gone"}})
+        r = httpx.post(env["base"] + "/v1/images/generations", headers={"Authorization": "Bearer master-test"},
+                       json={"model": "cx/gpt-image", "prompt": "a cat"}, timeout=30)
+        assert r.status_code == 200, r.text
+        assert r.headers["x-unirouter-target"] == "cx/gpt-image" and "gpt-gone" not in st.store.providers["codex"]["models"]
+        # race: target cũ còn trỏ model đã bị bỏ -> vẫn trả đích thay thế thay vì None
+        from unirouter.providers.base import ProviderError, Target
+        stale = Target(st.store.providers["codex"], "gpt-gone", "cx/gpt-gone", True)
+        nxt = st.router._replace_model(stale, ProviderError(400, "x", "model", model="gpt-gone"), "chat")
+        assert nxt is not None and nxt.label == "cx/gpt-ok"
+        # client chỉ định đích danh model hỏng -> không đổi sang model khác
+        stale = Target(st.store.providers["codex"], "gpt-gone", "cx/gpt-gone", False)
+        assert st.router._replace_model(stale, ProviderError(400, "x", "model", model="gpt-gone"), "chat") is None
+    finally:
+        st.store.upsert_provider({"id": "codex", "models": saved_models, "options": saved_opts})

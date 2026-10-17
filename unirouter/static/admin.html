@@ -140,6 +140,11 @@ label.f{display:block;margin-bottom:15px}label.f>span{display:block;font-size:12
 .chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:0 7px;line-height:20px;font-size:11.5px;font-family:var(--mono);color:var(--text2)}
 .chip.more{font-family:var(--sans);color:var(--accent);cursor:pointer;border-style:dashed}
+.chip.pick{cursor:pointer;transition:border-color .12s,color .12s}.chip.pick:hover{border-color:var(--accent);color:var(--text)}
+.chip.auto{background:var(--accent-weak);border-color:var(--accent);color:var(--accent-ink)}
+.chip.auto::before{content:"auto";font-family:var(--sans);font-size:10px;font-weight:600;margin-right:5px;opacity:.8}
+.mchoice{display:flex;flex-direction:column;gap:8px;margin:14px 0 6px}.mchoice .btn{justify-content:flex-start}
+.chip-in{font-family:var(--mono);font-size:11.5px;line-height:20px;padding:0 7px;border:1px solid var(--accent);border-radius:5px;background:var(--panel2);color:var(--text);min-width:min(260px,70vw);outline:none}
 
 /* tables */
 .tbl{overflow-x:auto}
@@ -370,7 +375,7 @@ details summary:hover{color:var(--text)}
         <div class="seg" id="pgMode"><button data-m="chat" class="on">Chat</button><button data-m="image">Tạo ảnh</button><button data-m="embed">Embedding</button></div></div>
       <div class="card"><div class="card-b">
         <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
-          <label class="f"><span>Model hoặc combo</span><input type="text" id="pgModel" list="modelOptions" value="auto" placeholder="auto, cx/gpt-5.5, tên combo…"></label>
+          <label class="f"><span>Model hoặc combo</span><input type="text" id="pgModel" list="modelOptions" value="auto" placeholder="auto, cx/gpt-5.6-sol, tên combo…"></label>
           <label class="f pg-chat"><span>System prompt <span class="muted" style="font-weight:400">· tùy chọn</span></span><input type="text" id="pgSystem" placeholder="Bạn là trợ lý…"></label>
           <label class="f pg-image hide"><span>Kích thước</span><select id="pgSize"><option value="">Mặc định</option><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option></select></label>
         </div>
@@ -582,11 +587,86 @@ function addButtons(p, primary = true) {
     ? `<button class="btn sm ${primary ? "primary" : ""}" onclick="codexLogin('${p.id}')">Đăng nhập ChatGPT</button><button class="btn sm" onclick="codexImport('${p.id}')">Nhập auth.json</button>`
     : `<button class="btn sm ${primary ? "primary" : ""}" onclick="addKey('${p.id}')">${icon("plus")}Thêm key</button>`;
 }
-function modelChips(p, limit = 8) {
-  if (!p.models.length) return `<span class="muted" style="font-size:12.5px">Chưa có model, sẽ tự lấy khi thêm key</span>`;
-  const shown = p.models.slice(0, limit).map(m => `<span class="chip" title="${p.latency[m] ? "TTFB ~" + p.latency[m] + " ms" : ""}">${esc(m)}</span>`).join("");
-  return shown + (p.models.length > limit ? `<span class="chip more" onclick="editProvider('${p.id}')">+${p.models.length - limit} model</span>` : "");
+function modelTools(p) {
+  const hasConn = p.connections.some(c => c.enabled);
+  return `<span class="chip more" title="Thêm model bằng tay (khi app không tự lấy được)" onclick="addModelBox('${p.id}', this)">+ model</span>` +
+    (hasConn ? `<span class="chip more" title="Lấy danh sách model từ chính provider (ưu tiên model miễn phí)" onclick="syncModels('${p.id}')">↻ lấy model</span>` : "");
 }
+function modelChips(p, limit = 8) {
+  if (!p.models.length) return `<span class="muted" style="font-size:12.5px;line-height:22px">Chưa có model${p.connections.length ? "" : ", sẽ tự lấy khi thêm key"}</span>` + modelTools(p);
+  const auto = p.kinds?.chat;
+  let list = p.models.slice(0, limit);
+  if (auto && !list.includes(auto) && p.models.includes(auto)) list = [auto, ...p.models.filter(m => m !== auto).slice(0, limit - 1)];
+  const shown = list.map(m => {
+    const tip = [m === auto ? "Model dùng khi gọi \"auto\"" : "", p.latency[m] ? "TTFB ~" + p.latency[m] + " ms" : "", "Bấm để chọn"].filter(Boolean).join(" · ");
+    return `<span class="chip pick ${m === auto ? "auto" : ""}" title="${esc(tip)}" data-m="${esc(m)}" onclick="modelMenu('${p.id}', this.dataset.m)">${esc(m)}</span>`;
+  }).join("");
+  return shown + (p.models.length > limit ? `<span class="chip more" onclick="editProvider('${p.id}')">+${p.models.length - limit} model</span>` : "") + modelTools(p);
+}
+
+// Lấy bản mới nhất của provider trước khi ghi danh sách model (router có thể vừa tự bỏ model, hoặc tab khác vừa sửa)
+async function freshProvider(pid) {
+  providers = (await api("/admin/api/providers")).data;
+  const p = providers.find(x => x.id === pid);
+  if (!p) throw new Error("Provider không còn tồn tại");
+  return p;
+}
+const splitModels = text => [...new Set(text.split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean))];
+
+window.addModelBox = (pid, el) => {
+  const inp = document.createElement("input");
+  inp.className = "chip-in"; inp.placeholder = "tên model, Enter để thêm"; inp.autocomplete = "off"; inp.spellcheck = false;
+  el.replaceWith(inp); inp.focus();
+  let done = false;
+  const cancel = () => { if (done) return; done = true; inp.replaceWith(el); };  // trả lại chip, không vẽ lại cả trang
+  inp.onkeydown = run(async e => {
+    if (e.key === "Escape") return cancel();
+    if (e.key !== "Enter" || done) return;
+    const names = splitModels(inp.value);
+    if (!names.length) return cancel();
+    done = true; inp.disabled = true;
+    try {
+      const p = await freshProvider(pid);
+      const add = names.filter(m => !p.models.includes(m));
+      if (!add.length) { toast("Model đã có trong danh sách"); inp.replaceWith(el); return; }
+      await api("/admin/api/providers", { body: { id: pid, models: [...p.models, ...add] } });
+      toast(`Đã thêm ${add.join(", ")}`);
+    } catch (e) { done = false; inp.disabled = false; inp.focus(); throw e; }
+    loadProviders();
+  });
+  inp.onblur = () => setTimeout(() => { if (!done && !inp.value.trim()) cancel(); }, 150);
+};
+
+window.addModelDialog = pid => {
+  const p = providers.find(x => x.id === pid);
+  modal(`${mHead(`Thêm model cho ${esc(p.name)}`, "Dùng khi app không tự lấy được danh sách model. Mỗi dòng hoặc mỗi dấu phẩy một model.")}
+    <label class="f"><span>Tên model</span><textarea id="amModels" style="min-height:70px" placeholder="vd: ${esc(p.models[0] || "gpt-4o-mini")}"></textarea></label>
+    ${p.models.length ? `<div class="hint" style="margin-top:-8px">Đang có: ${esc(p.models.slice(0, 6).join(", "))}${p.models.length > 6 ? ` và ${p.models.length - 6} model khác` : ""}</div>` : ""}
+    <div class="row end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="amSave">Thêm</button></div>`, m => {
+    m.querySelector("#amSave").onclick = run(async () => {
+      const cur = await freshProvider(pid);
+      const add = splitModels($("#amModels").value.replace(/ /g, "\n")).filter(x => !cur.models.includes(x));
+      if (!add.length) { toast("Chưa có model mới"); return; }
+      await api("/admin/api/providers", { body: { id: pid, models: [...cur.models, ...add] } });
+      closeModal(); toast(`Đã thêm ${add.join(", ")}`); loadProviders();
+    });
+  });
+};
+
+window.syncModels = run(async (pid, mode = "free") => {
+  const p = providers.find(x => x.id === pid);
+  toast("Đang lấy danh sách model…");
+  const r = await api(`/admin/api/providers/${pid}/sync-models`, { body: { mode } });
+  const added = r.added.length ? `Đã thêm ${r.added.length} model${r.free_only ? " miễn phí" : ""} vào ${p.name} (${r.models} model).` : "";
+  if (r.free_only && r.paid_left) {
+    loadProviders();
+    if (confirm(`${added ? added + "\n\n" : ""}${p.name} còn ${r.paid_left} model trả phí chưa thêm. Thêm nốt?`)) return syncModels(pid, "all");
+    if (added) toast(added);
+    return;
+  }
+  toast(added || r.note || `Không có model mới (provider trả ${r.fetched} model, đã có đủ)`);
+  loadProviders();
+});
 
 function providerBlock(p) {
   const conns = p.connections.map(c => {
@@ -619,8 +699,47 @@ function providerTile(p) {
       <div class="row" style="gap:6px;margin-top:3px">${typeBadge(p)}</div></div></div>
     <div class="prov-note">${esc(p.note || (p.models.length ? p.models.slice(0, 3).join(", ") : "Tương thích OpenAI"))}</div>
     <div class="row">${addButtons(p)}${p.signup_url ? `<a class="btn sm ghost" href="${esc(p.signup_url)}" target="_blank" rel="noopener">Lấy key${icon("ext")}</a>` : ""}
-      <button class="btn sm ghost" style="margin-left:auto" onclick="editProvider('${p.id}')">Sửa</button></div></div>`;
+      <button class="btn sm ghost" style="margin-left:auto" title="Thêm model bằng tay" onclick="addModelDialog('${p.id}')">+ model</button>
+      <button class="btn sm ghost" onclick="editProvider('${p.id}')">Sửa</button></div></div>`;
 }
+
+window.modelMenu = (pid, m) => {
+  const p = providers.find(x => x.id === pid);
+  if (!p) return;
+  const isAuto = p.kinds?.chat === m;
+  const conn = p.connections.find(c => c.enabled && c.health !== "disabled");
+  modal(`${mHead(`<span class="mono" style="font-size:15px">${esc(p.alias)}/${esc(m)}</span>`, isAuto ? `Đang là model ${esc(p.name)} dùng khi gọi "auto".` : `Chọn thao tác với model này của ${esc(p.name)}.`)}
+    <div class="mchoice">
+      <button class="btn ${isAuto ? "" : "primary"}" id="mmAuto" ${isAuto ? "disabled" : ""}>${icon("check")}Dùng cho "auto"</button>
+      <button class="btn" id="mmTest" ${conn ? "" : "disabled title=\"Chưa có tài khoản/API key\""}>Gọi thử</button>
+      <button class="btn" id="mmCopy">Copy tên model</button>
+      <button class="btn danger" id="mmDrop">Bỏ khỏi danh sách</button>
+    </div>
+    <div class="row end"><button class="btn ghost" onclick="closeModal()">Đóng</button></div>`, d => {
+    d.querySelector("#mmAuto").onclick = run(async () => {
+      const cur = await freshProvider(pid);
+      await api("/admin/api/providers", { body: { id: pid, options: { ...(cur.options || {}), auto_model: m } } });
+      closeModal(); toast(`"auto" sẽ dùng ${p.alias}/${m}`); loadProviders();
+    });
+    d.querySelector("#mmTest").onclick = run(async () => {
+      const b = d.querySelector("#mmTest"); b.disabled = true; b.textContent = "Đang gọi thử…";
+      try {
+        const r = await api(`/admin/api/connections/${conn.id}/test`, { body: { model: m } });
+        r.ok ? toast(`OK ${r.ms} ms (${r.model}): ${r.reply}`) : toast(`Lỗi ${r.status || ""}: ${r.error}`, true);
+      } finally { b.disabled = false; b.textContent = "Gọi thử"; }
+      loadProviders();
+    });
+    d.querySelector("#mmCopy").onclick = () => copyText(`${p.alias}/${m}`);
+    d.querySelector("#mmDrop").onclick = run(async () => {
+      if (!confirm(`Bỏ model ${m} khỏi ${p.name}? Có thể thêm lại bằng "+ model".`)) return;
+      const cur = await freshProvider(pid);
+      const opts = { ...(cur.options || {}) };
+      for (const k of ["auto_model", "image_chat_model"]) if (opts[k] === m) delete opts[k];
+      await api("/admin/api/providers", { body: { id: pid, models: cur.models.filter(x => x !== m), options: opts } });
+      closeModal(); toast(`Đã bỏ ${m}`); loadProviders();
+    });
+  });
+};
 
 window.testConn = run(async id => {
   toast("Đang gọi thử…");
@@ -657,8 +776,9 @@ window.addKey = pid => {
         try {
           const r = await api(`/admin/api/providers/${pid}/connections`, { body: { label: $("#mkLabel").value, api_key: $("#mkKey").value } });
           closeModal();
-          if (r.test && r.test.ok) toast(`Đã thêm ${r.added} key, gọi thử thành công (${r.test.ms} ms)`);
-          else if (r.test) toast(`Đã thêm key nhưng gọi thử lỗi: ${r.test.error}`, true);
+          const extra = r.added_models ? `, bổ sung ${r.added_models} model` : "";
+          if (r.test && r.test.ok) toast(`Đã thêm ${r.added} key${extra}, gọi thử thành công (${r.test.ms} ms)`);
+          else if (r.test) toast(`Đã thêm key${extra} nhưng gọi thử lỗi: ${r.test.error}`, true);
           else toast(`Đã thêm ${r.added} key${r.error ? ", chưa lấy được model: " + r.error : ""}`, !!r.error);
           loadProviders();
         } finally { b.disabled = false; b.textContent = "Lưu và gọi thử"; }
@@ -792,7 +912,7 @@ const loadCombos = run(async () => {
       ${c.note ? `<div class="prov-note">${esc(c.note)}</div>` : ""}
       <div class="flow">${c.resolved.map((r, j) => `${j ? `<span class="arrow">${c.strategy === "priority" ? "→" : "·"}</span>` : ""}<span class="chip" ${r.ok ? `title="${esc(r.targets.join(", "))}"` : `style="color:var(--bad);border-color:var(--bad)" title="${esc(r.error)}"`}>${esc(r.spec)}${r.ok && (r.targets.length > 1 || r.targets[0] !== r.spec) ? ` <span class="muted">(${r.targets.length})</span>` : ""}</span>`).join("")}</div>
     </div>`).join("")}</div>`
-    : `<div class="card">${empty(`Chưa có combo. Ví dụ: tạo combo <span class="mono">gpt-4o</span> trỏ tới <span class="mono">cx/gpt-5.5</span> rồi <span class="mono">nim/…</span> để bot cũ gọi "gpt-4o" vẫn chạy.`, "route")}</div>`;
+    : `<div class="card">${empty(`Chưa có combo. Ví dụ: tạo combo <span class="mono">gpt-4o</span> trỏ tới <span class="mono">cx/gpt-5.6-sol</span> rồi <span class="mono">nim/…</span> để bot cũ gọi "gpt-4o" vẫn chạy.`, "route")}</div>`;
 });
 function comboForm(c) {
   const isNew = !c;

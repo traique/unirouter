@@ -29,14 +29,18 @@ class ProviderError(Exception):
       "request"    lỗi do request của client -> trả lỗi ngay, không fallback
       "account"    lỗi của tài khoản (401/403/429) -> thử tài khoản khác cùng provider
       "target"     model/provider này lỗi -> thử model đích tiếp theo
+      "model"      provider không còn hỗ trợ model này (vd ChatGPT ngừng một model) -> bỏ model khỏi
+                   danh sách của provider; nếu đích do "auto" chọn thì thử ngay model kế tiếp cùng provider
     """
 
-    def __init__(self, status: int, message: str, scope: str = "target", cooldown: float = 0.0):
+    def __init__(self, status: int, message: str, scope: str = "target", cooldown: float = 0.0,
+                 model: str | None = None):
         super().__init__(message)
         self.status = status
         self.message = message
         self.scope = scope
         self.cooldown = cooldown  # giây; >0 => tạm khóa tài khoản
+        self.model = model        # scope "model": tên model (đã bỏ hậu tố effort) bị provider từ chối
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"ProviderError({self.status}, {self.scope}, {self.message[:80]!r})"
@@ -69,6 +73,7 @@ class Target:
     provider: dict[str, Any]
     model: str
     label: str  # "alias/model" để hiển thị
+    auto: bool = False  # model do "auto" chọn thay cho provider (không phải client chỉ định)
 
     @property
     def key(self) -> str:
@@ -91,7 +96,11 @@ class Provider:
         raise NotImplementedError
 
     async def list_models(self, provider: dict[str, Any], connection: dict[str, Any]) -> list[str]:
-        return list(provider.get("models") or [])
+        return [m["id"] for m in await self.list_models_detailed(provider, connection)]
+
+    async def list_models_detailed(self, provider: dict[str, Any], connection: dict[str, Any]) -> list[dict[str, Any]]:
+        """Danh sách model từ provider: [{"id", "free"}]. Model miễn phí xếp trước."""
+        return [{"id": m, "free": False} for m in provider.get("models") or []]
 
     async def embeddings(self, target: Target, connection: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
         raise ProviderError(400, f"{target.provider['name']} không hỗ trợ embeddings", "target")
