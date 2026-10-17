@@ -140,6 +140,10 @@ label.f{display:block;margin-bottom:15px}label.f>span{display:block;font-size:12
 .chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:0 7px;line-height:20px;font-size:11.5px;font-family:var(--mono);color:var(--text2)}
 .chip.more{font-family:var(--sans);color:var(--accent);cursor:pointer;border-style:dashed}
+.chip.pick{cursor:pointer;transition:border-color .12s,color .12s}.chip.pick:hover{border-color:var(--accent);color:var(--text)}
+.chip.auto{background:var(--accent-weak);border-color:var(--accent);color:var(--accent-ink)}
+.chip.auto::before{content:"auto";font-family:var(--sans);font-size:10px;font-weight:600;margin-right:5px;opacity:.8}
+.mchoice{display:flex;flex-direction:column;gap:8px;margin:14px 0 6px}.mchoice .btn{justify-content:flex-start}
 
 /* tables */
 .tbl{overflow-x:auto}
@@ -584,7 +588,11 @@ function addButtons(p, primary = true) {
 }
 function modelChips(p, limit = 8) {
   if (!p.models.length) return `<span class="muted" style="font-size:12.5px">Chưa có model, sẽ tự lấy khi thêm key</span>`;
-  const shown = p.models.slice(0, limit).map(m => `<span class="chip" title="${p.latency[m] ? "TTFB ~" + p.latency[m] + " ms" : ""}">${esc(m)}</span>`).join("");
+  const auto = p.kinds?.chat;
+  const shown = p.models.slice(0, limit).map(m => {
+    const tip = [m === auto ? "Model dùng khi gọi \"auto\"" : "", p.latency[m] ? "TTFB ~" + p.latency[m] + " ms" : "", "Bấm để chọn"].filter(Boolean).join(" · ");
+    return `<span class="chip pick ${m === auto ? "auto" : ""}" title="${esc(tip)}" data-m="${esc(m)}" onclick="modelMenu('${p.id}', this.dataset.m)">${esc(m)}</span>`;
+  }).join("");
   return shown + (p.models.length > limit ? `<span class="chip more" onclick="editProvider('${p.id}')">+${p.models.length - limit} model</span>` : "");
 }
 
@@ -621,6 +629,42 @@ function providerTile(p) {
     <div class="row">${addButtons(p)}${p.signup_url ? `<a class="btn sm ghost" href="${esc(p.signup_url)}" target="_blank" rel="noopener">Lấy key${icon("ext")}</a>` : ""}
       <button class="btn sm ghost" style="margin-left:auto" onclick="editProvider('${p.id}')">Sửa</button></div></div>`;
 }
+
+window.modelMenu = (pid, m) => {
+  const p = providers.find(x => x.id === pid);
+  if (!p) return;
+  const isAuto = p.kinds?.chat === m;
+  const conn = p.connections.find(c => c.enabled && c.health !== "disabled");
+  modal(`${mHead(`<span class="mono" style="font-size:15px">${esc(p.alias)}/${esc(m)}</span>`, isAuto ? `Đang là model ${esc(p.name)} dùng khi gọi "auto".` : `Chọn thao tác với model này của ${esc(p.name)}.`)}
+    <div class="mchoice">
+      <button class="btn ${isAuto ? "" : "primary"}" id="mmAuto" ${isAuto ? "disabled" : ""}>${icon("check")}Dùng cho "auto"</button>
+      <button class="btn" id="mmTest" ${conn ? "" : "disabled title=\"Chưa có tài khoản/API key\""}>Gọi thử</button>
+      <button class="btn" id="mmCopy">Copy tên model</button>
+      <button class="btn danger" id="mmDrop">Bỏ khỏi danh sách</button>
+    </div>
+    <div class="row end"><button class="btn ghost" onclick="closeModal()">Đóng</button></div>`, d => {
+    d.querySelector("#mmAuto").onclick = run(async () => {
+      await api("/admin/api/providers", { body: { id: pid, options: { ...(p.options || {}), auto_model: m } } });
+      closeModal(); toast(`"auto" sẽ dùng ${p.alias}/${m}`); loadProviders();
+    });
+    d.querySelector("#mmTest").onclick = run(async () => {
+      const b = d.querySelector("#mmTest"); b.disabled = true; b.textContent = "Đang gọi thử…";
+      try {
+        const r = await api(`/admin/api/connections/${conn.id}/test`, { body: { model: m } });
+        r.ok ? toast(`OK ${r.ms} ms (${r.model}): ${r.reply}`) : toast(`Lỗi ${r.status || ""}: ${r.error}`, true);
+      } finally { b.disabled = false; b.textContent = "Gọi thử"; }
+      loadProviders();
+    });
+    d.querySelector("#mmCopy").onclick = () => copyText(`${p.alias}/${m}`);
+    d.querySelector("#mmDrop").onclick = run(async () => {
+      if (!confirm(`Bỏ model ${m} khỏi ${p.name}? Có thể thêm lại trong Sửa.`)) return;
+      const opts = { ...(p.options || {}) };
+      for (const k of ["auto_model", "image_chat_model"]) if (opts[k] === m) delete opts[k];
+      await api("/admin/api/providers", { body: { id: pid, models: p.models.filter(x => x !== m), options: opts } });
+      closeModal(); toast(`Đã bỏ ${m}`); loadProviders();
+    });
+  });
+};
 
 window.testConn = run(async id => {
   toast("Đang gọi thử…");

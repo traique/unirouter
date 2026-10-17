@@ -297,6 +297,7 @@ def test_admin_flow(env):
         provs = c.get("/admin/api/providers").json()["data"]
         mock = next(p for p in provs if p["id"] == "mock")
         assert mock["connections"][0]["key_hint"] == "••••"
+        assert mock["kinds"]["chat"] == "ok"  # model "auto" hiện tại, trang admin tô nổi chip này
         assert c.post("/admin/api/keys", json={"name": "x"}).status_code == 403  # thiếu header CSRF
         key = c.post("/admin/api/keys", json={"name": "x", "rpm": 5}, headers=h).json()["key"]
         assert key.startswith("sk-uni-")

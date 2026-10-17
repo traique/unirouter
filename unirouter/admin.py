@@ -199,7 +199,7 @@ async def list_providers(request: Request):
         item = {k: p.get(k) for k in ("id", "alias", "name", "type", "base_url", "models", "headers", "options", "note",
                                       "enabled", "builtin", "signup_url", "free")}
         item["connections"] = [connection_view(st, c) for c in st.store.provider_connections(p["id"])]
-        item["kinds"] = {k: st.router.kind_model(p, k) for k in ("embeddings", "images")}
+        item["kinds"] = {k: st.router.kind_model(p, k) for k in ("chat", "embeddings", "images")}
         item["latency"] = {m: round(st.health.latency(f"{p['id']}/{m}")) for m in p["models"]
                            if 0 < st.health.latency(f"{p['id']}/{m}") < 1e8}
         out.append(item)

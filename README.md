@@ -89,6 +89,8 @@ docker run -d -p 20128:20128 -v $PWD/data:/app/data \
 3. **API Keys:** tạo một key `sk-uni-…` cho mỗi bot hoặc công cụ.
 4. Gọi model `auto`. Phần **Cài đặt → Kết nối client** có sẵn cấu hình mẫu để copy.
 
+Bấm vào một chip model trong thẻ provider để chọn nhanh: đặt làm model cho `auto`, gọi thử, copy tên hoặc bỏ khỏi danh sách. Chip có nhãn `auto` là model provider đó đang dùng khi gọi `auto`.
+
 Provider không có trong danh sách: bấm **Provider tùy chỉnh**, nhập tên, Base URL, API key. Header và các tùy chọn tương thích được tự xử lý.
 
 ## Gọi API
