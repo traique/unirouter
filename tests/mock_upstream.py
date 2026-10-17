@@ -143,6 +143,10 @@ async def codex(request: Request):
     if model == "gpt-limit":
         return JSONResponse({"error": {"type": "usage_limit_reached", "message": "limit",
                                        "resets_in_seconds": 1200}}, 429)
+    if model == "gpt-gone":
+        return JSONResponse({"error": {"type": "invalid_request_error", "code": "unsupported_model", "message":
+                                       f"The '{model}' model is not supported when using Codex with a ChatGPT account."}},
+                            400)
 
     async def gen():
         yield ev({"type": "response.created", "response": {"id": "resp_1", "status": "in_progress"}})

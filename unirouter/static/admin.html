@@ -370,7 +370,7 @@ details summary:hover{color:var(--text)}
         <div class="seg" id="pgMode"><button data-m="chat" class="on">Chat</button><button data-m="image">Tạo ảnh</button><button data-m="embed">Embedding</button></div></div>
       <div class="card"><div class="card-b">
         <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
-          <label class="f"><span>Model hoặc combo</span><input type="text" id="pgModel" list="modelOptions" value="auto" placeholder="auto, cx/gpt-5.5, tên combo…"></label>
+          <label class="f"><span>Model hoặc combo</span><input type="text" id="pgModel" list="modelOptions" value="auto" placeholder="auto, cx/gpt-5.6-sol, tên combo…"></label>
           <label class="f pg-chat"><span>System prompt <span class="muted" style="font-weight:400">· tùy chọn</span></span><input type="text" id="pgSystem" placeholder="Bạn là trợ lý…"></label>
           <label class="f pg-image hide"><span>Kích thước</span><select id="pgSize"><option value="">Mặc định</option><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option></select></label>
         </div>
@@ -792,7 +792,7 @@ const loadCombos = run(async () => {
       ${c.note ? `<div class="prov-note">${esc(c.note)}</div>` : ""}
       <div class="flow">${c.resolved.map((r, j) => `${j ? `<span class="arrow">${c.strategy === "priority" ? "→" : "·"}</span>` : ""}<span class="chip" ${r.ok ? `title="${esc(r.targets.join(", "))}"` : `style="color:var(--bad);border-color:var(--bad)" title="${esc(r.error)}"`}>${esc(r.spec)}${r.ok && (r.targets.length > 1 || r.targets[0] !== r.spec) ? ` <span class="muted">(${r.targets.length})</span>` : ""}</span>`).join("")}</div>
     </div>`).join("")}</div>`
-    : `<div class="card">${empty(`Chưa có combo. Ví dụ: tạo combo <span class="mono">gpt-4o</span> trỏ tới <span class="mono">cx/gpt-5.5</span> rồi <span class="mono">nim/…</span> để bot cũ gọi "gpt-4o" vẫn chạy.`, "route")}</div>`;
+    : `<div class="card">${empty(`Chưa có combo. Ví dụ: tạo combo <span class="mono">gpt-4o</span> trỏ tới <span class="mono">cx/gpt-5.6-sol</span> rồi <span class="mono">nim/…</span> để bot cũ gọi "gpt-4o" vẫn chạy.`, "route")}</div>`;
 });
 function comboForm(c) {
   const isNew = !c;

@@ -111,11 +111,11 @@ curl https://ai.example.com/v1/chat/completions \
 | Cách gọi | Ví dụ | Nghĩa |
 |---|---|---|
 | `auto` | `auto` | Mọi provider đang có key, thử lần lượt |
-| `tiền_tố/model` | `cx/gpt-5.5`, `groq/openai/gpt-oss-120b` | Đúng model đó của đúng provider |
+| `tiền_tố/model` | `cx/gpt-5.6-sol`, `groq/openai/gpt-oss-120b` | Đúng model đó của đúng provider |
 | tên combo | `gpt-4o`, `fast` | Danh sách model bạn tự định nghĩa |
 | tên model trần | `deepseek-chat` | Provider nào có model đó |
 
-Với ChatGPT, thêm hậu tố `-low`, `-medium`, `-high`, `-xhigh` để chọn mức suy luận, ví dụ `cx/gpt-5.5-high`. Client gửi tên model không tồn tại (vd `gpt-4o`, `claude-…`) sẽ tự chạy qua model mặc định, trừ khi bạn tắt trong Cài đặt.
+Với ChatGPT, thêm hậu tố `-low`, `-medium`, `-high`, `-xhigh` để chọn mức suy luận, ví dụ `cx/gpt-5.6-sol-high`. Client gửi tên model không tồn tại (vd `gpt-4o`, `claude-…`) sẽ tự chạy qua model mặc định, trừ khi bạn tắt trong Cài đặt.
 
 ### Embeddings
 
@@ -156,6 +156,7 @@ curl https://ai.example.com/v1/images/generations -H "Authorization: Bearer sk-u
 | 429, 401, 403, hết hạn mức | Tạm khóa key đó (theo Retry-After hoặc thời điểm reset), thử key khác cùng provider, rồi tới nguồn kế tiếp |
 | 5xx, timeout, lỗi mạng | Thử nguồn kế tiếp. Lỗi liên tiếp vượt ngưỡng thì nguồn đó nghỉ một lúc |
 | Model không tồn tại, vượt context | Thử nguồn kế tiếp |
+| ChatGPT báo model không còn hỗ trợ (`model is not supported`) | Bỏ model đó khỏi danh sách của provider; `auto` thử ngay model ChatGPT kế tiếp |
 | Request sai tham số | Trả lỗi ngay cho client |
 | Lỗi giữa lúc đang stream | Báo lỗi trong stream, không ghép câu trả lời từ hai model |
 

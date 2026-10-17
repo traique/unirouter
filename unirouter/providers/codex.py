@@ -2,6 +2,7 @@
 
 - Header giống Codex CLI, chỉ giữ các field backend chấp nhận, chế độ "responses lite"
 - Reasoning effort qua hậu tố model (-low, -high...), usage_limit_reached -> khóa tài khoản đến lúc reset
+- Model bị backend từ chối ("model is not supported") -> báo scope "model" để router bỏ model, thử model kế tiếp
 - curl_cffi giả lập trình duyệt, tự retry 1 lần khi server quá tải trước khi có output
 """
 from __future__ import annotations
@@ -261,12 +262,12 @@ class CodexProvider(Provider):
             if resp.status_code >= 400:
                 raw = await resp.acontent()
                 await codex_auth.abort_response(resp)
-                raise self._http_error(resp.status_code, raw, resp.headers)
+                raise self._http_error(resp.status_code, raw, resp.headers, str(payload.get("model") or ""))
             return resp
         raise ProviderError(401, "ChatGPT từ chối token", "account", 300)
 
     @staticmethod
-    def _http_error(status: int, raw: bytes, headers: Any) -> ProviderError:
+    def _http_error(status: int, raw: bytes, headers: Any, model: str = "") -> ProviderError:
         msg = http.error_message(raw, status)
         if status == 429:
             try:
@@ -280,8 +281,10 @@ class CodexProvider(Provider):
                 elif isinstance(err.get("resets_in_seconds"), (int, float)):
                     cooldown = float(err["resets_in_seconds"])
                 return ProviderError(429, f"Hết hạn mức ChatGPT: {msg}", "account", max(cooldown, 60))
-        if status == 400 and "model" in msg.lower() and "not supported" in msg.lower():
-            return ProviderError(400, msg, "target")
+        if status == 400 and "model" in msg.lower() and ("not supported" in msg.lower() or "unsupported" in msg.lower()):
+            # vd "The 'gpt-5.5' model is not supported when using Codex with a ChatGPT account."
+            # Không phải lỗi tài khoản: bỏ model này khỏi provider để "auto" chuyển sang model kế tiếp.
+            return ProviderError(400, msg, "model", model=model or None)
         return classify_http(status, msg, http.retry_after(headers))
 
     async def open(self, target: Target, connection: dict[str, Any], ctx: CallContext) -> AsyncIterator[Event]:

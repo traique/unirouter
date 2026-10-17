@@ -697,3 +697,56 @@ def test_expired_image_not_served(env):
     os.utime(images.DIR / name, (old, old))
     assert images.path_of(name) is None
     assert httpx.get(env["base"] + f"/v1/images/files/{name}").status_code == 404
+
+
+# ------------------------------------------------------------------ ChatGPT ngừng hỗ trợ model
+def test_codex_unsupported_model_dropped_and_auto_moves_on(env):
+    """ChatGPT trả 400 "model is not supported": bỏ model khỏi provider, auto thử ngay model kế tiếp,
+    tài khoản không bị tạm khóa."""
+    st, mock = env["st"], env["mock"]
+    p = st.store.providers["codex"]
+    saved_models, saved_opts = list(p["models"]), dict(p["options"])
+    cid = next(c["id"] for c in st.store.connections.values() if c["label"] == "chatgpt-1")
+    st.store.upsert_provider({"id": "codex", "models": ["gpt-gone", *saved_models],
+                              "options": {**saved_opts, "auto_model": "gpt-gone"}})
+    for c in st.store.connections.values():
+        st.health.reset(c["id"])
+    try:
+        assert st.router.resolve("auto")[0][0].label == "cx/gpt-gone"
+        before = mock.calls.get("codex:gpt-gone", 0)
+        r = httpx.post(env["base"] + "/v1/chat/completions", headers={"Authorization": "Bearer master-test"},
+                       json={"model": "auto", "messages": [{"role": "user", "content": "hi"}]})
+        assert r.status_code == 200 and r.headers["x-unirouter-target"] == "cx/gpt-ok"
+        assert r.json()["choices"][0]["message"]["content"] == "Xin chào"
+        assert mock.calls["codex:gpt-gone"] == before + 1
+        p = st.store.providers["codex"]
+        assert "gpt-gone" not in p["models"] and "auto_model" not in p["options"]
+        assert st.health.available(cid) and st.health.conn(cid).failures == 0
+        assert st.router.resolve("auto")[0][0].label == "cx/gpt-ok"
+        # Client chỉ định đúng model đó: trả lỗi 400 của ChatGPT, không tự đổi model, không khóa tài khoản
+        r = httpx.post(env["base"] + "/v1/chat/completions", headers={"Authorization": "Bearer master-test"},
+                       json={"model": "cx/gpt-gone-high", "messages": [{"role": "user", "content": "hi"}]})
+        assert r.status_code == 400 and "not supported" in r.json()["error"]["message"]
+        assert st.health.available(cid)
+        # Model đã bị bỏ khỏi /v1/models
+        assert "cx/gpt-gone" not in [m.id for m in oa(env).models.list()]
+    finally:
+        st.store.upsert_provider({"id": "codex", "models": saved_models, "options": saved_opts})
+
+
+def test_seed_retires_codex_models():
+    import json
+    import sqlite3
+    import tempfile
+    from unirouter.db import Store
+    path = tempfile.mktemp(suffix=".db")
+    Store(path)
+    con = sqlite3.connect(path)
+    con.execute("UPDATE providers SET models=?, options=? WHERE id='codex'",
+                (json.dumps(["gpt-5.5", "gpt-5.6-sol"]), json.dumps({"auto_model": "gpt-5.5", "default_effort": "low"})))
+    con.commit()
+    con.close()
+    st = Store(path)
+    p = st.providers["codex"]
+    assert p["models"] == ["gpt-5.6-sol"]
+    assert "auto_model" not in p["options"] and p["options"]["default_effort"] == "low"
