@@ -39,12 +39,19 @@ def serve(app, port: int) -> uvicorn.Server:
 def env():
     from tests import mock_upstream
     from unirouter.app import create_app
-    from unirouter.providers import codex_auth
+    from unirouter.providers import codex_auth, gemini_web
+    from unirouter.providers import gemini_web_auth as gwa
 
     up_port = free_port()
     serve(mock_upstream.app, up_port)
     up = f"http://127.0.0.1:{up_port}"
     codex_auth.AUTH_BASE = up + "/auth"
+    codex_auth.AUTHORIZE_URL = up + "/auth/authorize"
+    # Trỏ Gemini Web vào mock
+    gwa.APP_URL = up + "/gw/app"
+    gwa.ROTATE_URL = up + "/gw/RotateCookies"
+    gemini_web.BASE = up
+    gemini_web.STREAM_PATH = "/gw/stream"
 
     app = create_app()
     st = app.state.app
@@ -61,6 +68,22 @@ def env():
     st.store.add_connection("codex", "chatgpt-1", {"access_token": mock_upstream.access_token(60), "refresh_token": "rt-1",
                                                    "expires_at": int(time.time() * 1000) + 60_000},
                             {"account_id": "acc-123"})
+    st.store.upsert_provider({"id": "gemini-web", "alias": "gmw", "name": "Gemini Web", "type": "gemini_web",
+                              "base_url": up + "/gw", "models": ["gemini-web"], "options": {"temporary_chats": True}})
+    st.store.add_connection("gemini-web", "gw-1", {"cookies": {"__Secure-1PSID": "GOODPSID", "SID": "x"}, "rotated_at": 0},
+                            {"cookie_fp": "GOODPS…"})
     port = free_port()
     serve(app, port)
     return {"base": f"http://127.0.0.1:{port}", "app": app, "st": st, "mock": mock_upstream, "up": up}
+
+
+@pytest.fixture()
+def admin(env):
+    """Client đã đăng nhập admin (có cookie phiên + header CSRF) cho các test gọi /admin/api."""
+    import httpx
+
+    c = httpx.Client(base_url=env["base"], headers={"X-Requested-With": "unirouter"})
+    r = c.post("/admin/api/login", json={"username": "admin", "password": "pw"})
+    assert r.status_code == 200
+    yield c
+    c.close()

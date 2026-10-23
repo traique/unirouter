@@ -10,7 +10,7 @@ from . import config, http
 from .admin import router as admin_router
 from .api import error_body
 from .api import router as api_router
-from .providers import codex_auth
+from .providers import codex_auth, gemini_web_auth
 from .state import AppState
 
 
@@ -18,10 +18,13 @@ def create_app(state: AppState | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.app.usage.start()
+        app.state.app.keepalive.start()
         yield
+        await app.state.app.keepalive.stop()
         await app.state.app.usage.stop()
         await http.close()
         await codex_auth.close()
+        await gemini_web_auth.close()
 
     app = FastAPI(title="UniRouter", version=config.VERSION, docs_url=None, redoc_url=None, openapi_url=None,
                   lifespan=lifespan)

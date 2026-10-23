@@ -217,9 +217,72 @@ async def codex_models(request: Request):
     return {"models": [{"slug": "gpt-ok"}, {"slug": "gpt-new-b"}, {"slug": "gpt-new-a"}]}
 
 
+# ---------------------------------------------------------------- Gemini Web mock
+gw_state = {"rotations": 0, "cookie_dead": False, "at": "xsrf-tok-123"}
+
+
+@app.get("/gw/app")
+async def gw_app(request: Request):
+    calls["gw-app"] = calls.get("gw-app", 0) + 1
+    cookie = request.headers.get("cookie", "")
+    if gw_state["cookie_dead"] or "__Secure-1PSID=" not in cookie:
+        return app_html_response("<html><body>signed out</body></html>")
+    if "DEADPSID" in cookie:
+        # mô phỏng /sorry/ (Google bắt xác minh)
+        return app_html_response("<html><body>unusual traffic detected</body></html>")
+    return app_html_response('<html><script>window.WIZ={"SNlM0e":"%s","cfb2h":"boq_test_1"};</script></html>' % gw_state["at"])
+
+
+def app_html_response(html: str):
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(html)
+
+
+@app.post("/gw/RotateCookies")
+async def gw_rotate(request: Request):
+    gw_state["rotations"] += 1
+    from fastapi.responses import JSONResponse as JR
+    resp = JR({"ok": True})
+    resp.set_cookie("__Secure-1PSIDTS", f"rot-{gw_state['rotations']}")
+    return resp
+
+
+@app.post("/gw/stream")
+async def gw_stream(request: Request):
+    calls["gw-stream"] = calls.get("gw-stream", 0) + 1
+    body = (await request.body()).decode()
+    last_body["gw-stream"] = body
+    from urllib.parse import parse_qs
+    if parse_qs(body).get("at", [""])[0] != gw_state["at"]:
+        calls["gw-stale"] = calls.get("gw-stale", 0) + 1
+        return app_text("stale token", 400)
+    if "FAILPROMPT" in body:
+        return app_text("\n)]}'\n\n[[\"wrb.fr\",null,null]]\nBardErrorInfo [42]\n")
+    # Gemini trả bản tích lũy: mỗi dòng wrb.fr là câu trả lời dài hơn dòng trước
+    def line(text):
+        inner = json.dumps([None, None, None, None, [[None, [text]]]])
+        return json.dumps([["wrb.fr", None, inner]]) + " " * 200 + "\n"
+    full = "Xin chào từ Gemini Web."
+    if "RICH" in body:
+        full = 'Hi\n<Section title="Greeting">\nXin chào\n</Section>'
+    cuts = [8, 16, len(full)]
+    return app_text(")]}'\n\n" + "".join(line(full[:c]) for c in cuts))
+
+
+def app_text(text: str, status: int = 200):
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(text, status_code=status)
+
+
+# ---------------------------------------------------------------- PKCE authorize mock
 @app.post("/auth/oauth/token")
 async def token(request: Request):
     form = await request.form()
+    if form.get("grant_type") == "authorization_code":
+        calls["pkce_exchange"] = calls.get("pkce_exchange", 0) + 1
+        if form.get("code") != "good-code" or not form.get("code_verifier"):
+            return JSONResponse({"error": "invalid_grant"}, 400)
+        return {"access_token": access_token(), "refresh_token": "rt-pkce", "id_token": access_token(), "expires_in": 3600}
     calls["refresh"] = calls.get("refresh", 0) + 1
     if form.get("refresh_token") == "dead":
         return JSONResponse({"error": "invalid_grant", "error_description": "refresh token reused"}, 400)

@@ -7,7 +7,7 @@ import os
 import secrets
 from pathlib import Path
 
-VERSION = "1.4.5"
+VERSION = "1.5.1"
 
 
 def load_dotenv(*paths: Path) -> list[str]:
@@ -62,6 +62,9 @@ COOKIE_SECURE = _env("COOKIE_SECURE", "auto").lower()  # auto | true | false
 
 # Địa chỉ public của app (vd https://ai.example.com), dùng tạo link ảnh. Để trống = lấy từ request.
 PUBLIC_URL = _env("PUBLIC_URL").rstrip("/")
+
+# Proxy riêng cho Gemini Web (một số IP datacenter bị Google bắt xác minh; để trống = đi thẳng).
+GEMINI_WEB_PROXY = _env("GEMINI_WEB_PROXY")
 
 REQUEST_TIMEOUT = float(_env("REQUEST_TIMEOUT", "300"))
 CONNECT_TIMEOUT = float(_env("CONNECT_TIMEOUT", "15"))

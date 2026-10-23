@@ -3,480 +3,594 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
-<title>UniRouter</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a1d15'/%3E%3Cpath d='M10 9v8a6 6 0 0 0 12 0V9' stroke='%23f0a070' stroke-width='3.2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='22' cy='9' r='2.4' fill='%23b9cc63'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script>try{const t=localStorage.getItem("uni-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<meta name="robots" content="noindex">
+<title>UniRouter · Quản trị</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230E6F7A'/%3E%3Cpath d='M8 22V10h4v8h8v-8h4v12z' fill='white'/%3E%3C/svg%3E">
 <style>
-/* Trà đào cam sả: nền giấy trà, cam đào làm điểm nhấn, xanh sả cho trạng thái tốt */
-:root{
-  --bg:#faf5ee;--side:#f3eadf;--panel:#fffdfa;--panel2:#fbf6f0;--hover:#f6eee4;--sunk:#f1e8dc;
-  --text:#2a1d15;--text2:#4d3b2f;--muted:#8a7464;--faint:#b4a191;--line:#eee3d6;--line2:#e1d2c1;
-  --accent:#bf5520;--accent-hi:#e0773a;--accent-weak:#fbe6d8;--accent-ink:#8f3a10;--on-accent:#fff;
-  --sa:#6b7d1f;--sa-weak:#eef1da;
-  --ok:#5d7318;--ok-bg:#eef1da;--warn:#a8640a;--warn-bg:#fcf0d9;--bad:#b4232f;--bad-bg:#fbe7e6;
-  --s-ok:#e0773a;--s-err:#9b1c3c;
-  --shadow:0 1px 0 rgba(62,39,20,.04);--shadow2:0 18px 40px -12px rgba(62,39,20,.28);--hl:none;
-  --logo-bg:#2a1d15;--logo-u:#f0a070;--logo-dot:#b9cc63;
-  --r:10px;--sans:"Be Vietnam Pro",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
-  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+:root {
+  color-scheme: light;
+  --bg: #EDF0F2; --panel: #FFFFFF; --sunk: #F5F7F8; --hover: #F0F3F5;
+  --ink: #17212B; --ink-2: #4A5866; --ink-3: #5E6B77; --line: #D6DCE1; --line-2: #E6EAED;
+  --accent: #0E6F7A; --accent-ink: #FFFFFF; --accent-soft: #DCEEF0; --accent-text: #0B5C66;
+  --ok: #23693F; --ok-soft: #E1F2E8; --warn: #7D520B; --warn-soft: #FBEFD9; --bad: #A5301F; --bad-soft: #FBE4E1;
+  --off: #A3AEB8;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --r-s: 6px; --r-m: 10px;
+  --shadow: 0 1px 2px rgba(23, 33, 43, .06), 0 8px 24px rgba(23, 33, 43, .08);
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#13100e;--side:#0f0d0b;--panel:#1a1613;--panel2:#1f1a17;--hover:#241e1a;--sunk:#262019;
-  --text:#f3ebe2;--text2:#d6c9bc;--muted:#9d8e81;--faint:#6f6258;--line:#2a231e;--line2:#3a3029;
-  --accent:#f0a070;--accent-hi:#f0a070;--accent-weak:#33221a;--accent-ink:#f7c6a3;--on-accent:#24150c;
-  --sa:#b9cc63;--sa-weak:#232913;
-  --ok:#b5c95e;--ok-bg:#222713;--warn:#e8b450;--warn-bg:#2b2213;--bad:#f08080;--bad-bg:#311a1a;
-  --s-ok:#dc7434;--s-err:#b02e55;
-  --shadow:0 1px 0 rgba(0,0,0,.25);--shadow2:0 24px 48px -12px rgba(0,0,0,.7);--hl:inset 0 1px 0 rgba(255,240,225,.035);
-  --logo-bg:#f3ebe2;--logo-u:#c95b22;--logo-dot:#6b7d1f;}}
-:root[data-theme=dark]{--bg:#13100e;--side:#0f0d0b;--panel:#1a1613;--panel2:#1f1a17;--hover:#241e1a;--sunk:#262019;
-  --text:#f3ebe2;--text2:#d6c9bc;--muted:#9d8e81;--faint:#6f6258;--line:#2a231e;--line2:#3a3029;
-  --accent:#f0a070;--accent-hi:#f0a070;--accent-weak:#33221a;--accent-ink:#f7c6a3;--on-accent:#24150c;
-  --sa:#b9cc63;--sa-weak:#232913;
-  --ok:#b5c95e;--ok-bg:#222713;--warn:#e8b450;--warn-bg:#2b2213;--bad:#f08080;--bad-bg:#311a1a;
-  --s-ok:#dc7434;--s-err:#b02e55;
-  --shadow:0 1px 0 rgba(0,0,0,.25);--shadow2:0 24px 48px -12px rgba(0,0,0,.7);--hl:inset 0 1px 0 rgba(255,240,225,.035);
-  --logo-bg:#f3ebe2;--logo-u:#c95b22;--logo-dot:#6b7d1f;}
-:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
-
-*{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 var(--sans);-webkit-font-smoothing:antialiased;font-feature-settings:"ss01","cv11"}
-::selection{background:var(--accent-weak);color:var(--accent-ink)}
-a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline;text-underline-offset:3px}
-button,input,select,textarea{font:inherit;color:inherit}
-svg.i{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.hide{display:none!important}
-.num,.tnum{font-variant-numeric:tabular-nums}
-
-/* layout */
-.layout{display:flex;min-height:100vh}
-nav.side{width:236px;flex:none;background:var(--side);border-right:1px solid var(--line);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:20px 14px 14px}
-.brand{display:flex;align-items:center;gap:11px;padding:0 8px 26px}
-.logo{width:30px;height:30px;border-radius:8px;background:var(--logo-bg);display:grid;place-items:center;flex:none}
-.logo svg{width:20px;height:20px}
-.brand b{font-size:15.5px;font-weight:700;letter-spacing:-.02em}.brand small{display:block;color:var(--muted);font-size:11.5px;font-weight:500;line-height:1.25;font-family:var(--mono);letter-spacing:-.01em}
-.navgroup{font-size:11px;font-weight:600;color:var(--faint);letter-spacing:.08em;padding:14px 10px 6px;text-transform:uppercase}
-nav.side button[data-tab]{display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:0;background:none;padding:7px 10px;border-radius:7px;cursor:pointer;color:var(--text2);font-weight:500;margin-bottom:1px;position:relative;transition:background .12s,color .12s}
-nav.side button[data-tab] svg{color:var(--muted)}
-nav.side button[data-tab]:hover{background:var(--hover);color:var(--text)}
-nav.side button[data-tab].active{background:var(--panel);color:var(--text);box-shadow:0 0 0 1px var(--line),var(--shadow)}
-nav.side button[data-tab].active::before{content:"";position:absolute;left:-14px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--accent-hi)}
-nav.side button[data-tab].active svg{color:var(--accent)}
-nav.side .foot{margin-top:auto;border-top:1px solid var(--line);padding-top:14px;display:flex;align-items:center;gap:8px}
-.avatar{width:30px;height:30px;border-radius:50%;background:var(--accent-weak);color:var(--accent-ink);display:grid;place-items:center;font-weight:700;font-size:11.5px;flex:none}
-.foot .who{flex:1;min-width:0;font-size:12px;line-height:1.3}.foot .who b{display:block;font-size:13px;font-weight:600}
-.iconbtn{border:1px solid var(--line2);background:var(--panel);width:30px;height:30px;border-radius:7px;display:grid;place-items:center;cursor:pointer;color:var(--muted);flex:none}
-.iconbtn:hover{color:var(--text);background:var(--hover)}
-.iconbtn svg.i{width:15px;height:15px}
-main{flex:1;min-width:0;padding:32px 40px 80px}
-.wrap{max-width:1160px;margin:0 auto}
-.pagehead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:24px;flex-wrap:wrap}
-h1{font-size:24px;letter-spacing:-.03em;margin:0 0 4px;font-weight:700;line-height:1.2}
-h2{font-size:14.5px;margin:0;font-weight:600;letter-spacing:-.01em}h3{font-size:14px;margin:0;font-weight:600;letter-spacing:-.01em}
-.sub{color:var(--muted);margin:0;max-width:620px}
-.section-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:30px 0 12px}
-.section-title h2{font-size:12px;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;font-weight:600}
-.section-title h2 em{font-style:normal;color:var(--faint);margin-left:6px}
-
-/* surfaces */
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow),var(--hl);margin-bottom:18px}
-.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.card-b{padding:18px 20px}
-.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
-.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
-.kpi{padding:18px 20px 16px;min-width:0}
-.kpi+.kpi{border-left:1px solid var(--line)}
-.kpi .l{color:var(--muted);font-size:12.5px;font-weight:500;display:flex;align-items:center;gap:7px}
-.kpi .l i{width:7px;height:7px;border-radius:2px;background:var(--faint)}
-.kpi .v{font-size:30px;font-weight:650;letter-spacing:-.035em;margin-top:6px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
-.kpi .v small{font-size:14px;color:var(--muted);font-weight:500;letter-spacing:0;margin-left:2px}
-.kpi .s{color:var(--muted);font-size:12px;margin-top:4px}
-.meter{height:4px;background:var(--sunk);border-radius:4px;margin-top:10px;overflow:hidden}.meter i{display:block;height:100%;background:var(--ok);border-radius:4px}
-.minis{display:flex;flex-wrap:wrap;border-top:1px solid var(--line);background:var(--panel2);border-radius:0 0 var(--r) var(--r)}
-.mini{flex:1;min-width:150px;padding:10px 20px;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px}
-.mini+.mini{border-left:1px solid var(--line)}
-.mini span{color:var(--muted)}.mini b{font-variant-numeric:tabular-nums;font-weight:600}
-
-/* controls */
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row.between{justify-content:space-between}.row.end{justify-content:flex-end}
-.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);background:var(--panel);padding:7px 13px;border-radius:7px;cursor:pointer;white-space:nowrap;font-weight:500;color:var(--text2);box-shadow:var(--shadow);transition:background .12s,border-color .12s,color .12s}
-.btn:hover{background:var(--hover);color:var(--text);text-decoration:none}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 1px 2px rgba(120,50,10,.25)}
-.btn.primary:hover{filter:brightness(1.07);background:var(--accent);color:var(--on-accent)}
-.btn.ghost{border-color:transparent;box-shadow:none;background:none}.btn.ghost:hover{background:var(--hover)}
-.btn.danger{color:var(--bad)}.btn.danger:hover{background:var(--bad-bg)}
-.btn.sm{padding:4px 10px;font-size:12.5px;border-radius:6px}
-.btn svg.i{width:14px;height:14px}
-.btn:disabled{opacity:.55;cursor:default}
-a.btn{color:var(--text2)}
-input[type=text],input[type=password],input[type=number],select,textarea{border:1px solid var(--line2);background:var(--panel);border-radius:7px;padding:8px 11px;width:100%;outline:none;transition:border-color .12s,box-shadow .12s}
-input::placeholder,textarea::placeholder{color:var(--faint)}
-input:focus,select:focus,textarea:focus{border-color:var(--accent-hi);box-shadow:0 0 0 3px var(--accent-weak)}
-textarea{font-family:var(--mono);font-size:12.5px;min-height:76px;resize:vertical}
-label.f{display:block;margin-bottom:15px}label.f>span{display:block;font-size:12.5px;color:var(--text2);font-weight:500;margin-bottom:6px}
-.hint{color:var(--muted);font-size:12px;margin-top:5px;font-weight:400}
-.switch{display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:14px;color:var(--text2)}
-.switch input{width:16px;height:16px;margin-top:3px;accent-color:var(--accent)}
-.seg{display:inline-flex;background:var(--sunk);border-radius:8px;padding:3px;gap:2px}
-.seg button{border:0;background:none;padding:4px 12px;border-radius:6px;cursor:pointer;color:var(--muted);font-weight:500;font-size:12.5px}
-.seg button:hover{color:var(--text)}
-.seg button.on{background:var(--panel);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-
-/* badges & status */
-.badge{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:500;padding:0 7px;line-height:20px;border-radius:5px;background:var(--sunk);color:var(--muted);white-space:nowrap}
-.badge.mono{font-family:var(--mono);font-size:11px}
-.badge.free{background:var(--sa-weak);color:var(--sa)}
-.badge.accent{background:var(--accent-weak);color:var(--accent-ink)}
-.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;padding:0 8px;line-height:21px;border-radius:5px;white-space:nowrap;font-variant-numeric:tabular-nums}
-.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
-.pill.ok{background:var(--ok-bg);color:var(--ok)}.pill.cooldown{background:var(--warn-bg);color:var(--warn)}
-.pill.error{background:var(--bad-bg);color:var(--bad)}.pill.disabled{background:var(--sunk);color:var(--muted)}
-.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none;background:var(--faint)}
-.dot.ok{background:var(--ok);box-shadow:0 0 0 3px var(--ok-bg)}.dot.error{background:var(--bad);box-shadow:0 0 0 3px var(--bad-bg)}.dot.cooldown{background:var(--warn);box-shadow:0 0 0 3px var(--warn-bg)}
-.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.muted{color:var(--muted)}.mono{font-family:var(--mono);font-size:12px;letter-spacing:-.01em}
-.code{font-family:var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:12px 14px;white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.65;color:var(--text2)}
-.chips{display:flex;flex-wrap:wrap;gap:5px}
-.chip{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:0 7px;line-height:20px;font-size:11.5px;font-family:var(--mono);color:var(--text2)}
-.chip.more{font-family:var(--sans);color:var(--accent);cursor:pointer;border-style:dashed}
-.chip.pick{cursor:pointer;transition:border-color .12s,color .12s}.chip.pick:hover{border-color:var(--accent);color:var(--text)}
-.chip.auto{background:var(--accent-weak);border-color:var(--accent);color:var(--accent-ink)}
-.chip.auto::before{content:"auto";font-family:var(--sans);font-size:10px;font-weight:600;margin-right:5px;opacity:.8}
-.mchoice{display:flex;flex-direction:column;gap:8px;margin:14px 0 6px}.mchoice .btn{justify-content:flex-start}
-.chip-in{font-family:var(--mono);font-size:11.5px;line-height:20px;padding:0 7px;border:1px solid var(--accent);border-radius:5px;background:var(--panel2);color:var(--text);min-width:min(260px,70vw);outline:none}
-
-/* tables */
-.tbl{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;text-align:left;padding:10px 20px;border-bottom:1px solid var(--line);white-space:nowrap}
-td{padding:11px 20px;border-bottom:1px solid var(--line);vertical-align:middle}
-tr:last-child td{border-bottom:0}tbody tr{transition:background .1s}tbody tr:hover td{background:var(--panel2)}
-td.mono{white-space:nowrap}
-td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-.empty{padding:34px 18px;text-align:center;color:var(--muted);font-size:13px}
-.empty svg{width:26px;height:26px;stroke:var(--faint);margin-bottom:8px;stroke-width:1.5}
-
-/* chart */
-.chartwrap{position:relative;padding:22px 20px 14px}
-.chart{display:flex;align-items:flex-end;gap:2px;height:160px;border-bottom:1px solid var(--line2);position:relative}
-.chart .col{flex:1;display:flex;flex-direction:column-reverse;gap:2px;height:100%;justify-content:flex-start;cursor:default;position:relative;min-width:2px;z-index:1}
-.chart .col:hover{background:var(--hover);border-radius:3px 3px 0 0}
-.chart .seg-ok{background:var(--s-ok);border-radius:3px 3px 0 0}
-.chart .seg-err{background:var(--s-err);border-radius:3px 3px 0 0}
-.chart .seg-ok.under{border-radius:0}
-.gridline{position:absolute;left:0;right:0;border-top:1px dashed var(--line);pointer-events:none}
-.gridline span{position:absolute;left:0;top:-17px;font-size:10.5px;color:var(--faint);font-variant-numeric:tabular-nums}
-.axis{display:flex;justify-content:space-between;color:var(--faint);font-size:11px;margin-top:7px;font-variant-numeric:tabular-nums}
-.legend{display:flex;gap:14px;font-size:12px;color:var(--muted)}
-.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px}
-#tip{position:fixed;pointer-events:none;background:var(--panel);color:var(--text);border:1px solid var(--line2);font-size:12px;padding:8px 11px;border-radius:8px;z-index:30;box-shadow:var(--shadow2);white-space:nowrap;line-height:1.5}
-#tip b{font-weight:600}#tip i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
-
-/* providers */
-.prov{padding:18px 20px}
-.prov+.prov{border-top:1px solid var(--line)}
-.prov-h{display:flex;gap:14px;align-items:flex-start}
-.pav{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-weight:600;font-size:12px;flex:none;letter-spacing:-.02em;font-family:var(--mono);background:var(--panel2);border:1px solid var(--line2);color:var(--text2)}
-.pav.on{background:var(--accent-weak);border-color:transparent;color:var(--accent-ink)}
-.prov-t{flex:1;min-width:0}.prov-t .row{gap:7px}
-.prov-note{color:var(--muted);font-size:12.5px;margin-top:4px;line-height:1.5}
-.conns{margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.conn{display:flex;gap:12px;align-items:center;padding:10px 14px;background:var(--panel2)}
-.conn+.conn{border-top:1px solid var(--line)}
-.conn .info{flex:1;min-width:0}.conn .meta{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis}
-.conn .err{color:var(--bad);font-size:12px;word-break:break-word;margin-top:2px;font-family:var(--mono)}
-.tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
-.tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow),var(--hl);transition:border-color .15s}
-.tile:hover{border-color:var(--accent-hi)}
-.tile .prov-note{flex:1}
-.combo{padding:16px 20px}.combo+.combo{border-top:1px solid var(--line)}
-.flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
-.flow .arrow{color:var(--faint);font-size:12px}
-
-/* steps */
-.steps{display:grid;grid-template-columns:repeat(3,1fr)}
-.step{padding:18px 20px;display:flex;gap:12px}.step+.step{border-left:1px solid var(--line)}
-.step .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:600;border:1.5px solid var(--line2);color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
-.step .n svg{width:13px;height:13px;stroke-width:2.4}
-.step.done .n{background:var(--ok);border-color:var(--ok);color:var(--panel)}
-.step.done b{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line2)}
-.step p{margin:3px 0 12px;color:var(--muted);font-size:12.5px}
-
-/* misc */
-.alert{display:flex;gap:10px;border-radius:8px;padding:11px 14px;margin-bottom:14px;background:var(--warn-bg);color:var(--warn);font-size:13px;align-items:flex-start}
-.alert svg{margin-top:2px}
-.alert.info{background:var(--accent-weak);color:var(--accent-ink)}
-.modal-bg{position:fixed;inset:0;background:rgba(30,20,12,.42);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20;animation:fade .14s ease-out}
-.modal{background:var(--panel);border-radius:12px;width:100%;max-width:540px;max-height:90vh;overflow:auto;border:1px solid var(--line);box-shadow:var(--shadow2),var(--hl);padding:24px 26px 22px;animation:pop .16s cubic-bezier(.2,.8,.3,1)}
-.modal h2{font-size:17px;margin-bottom:4px;letter-spacing:-.02em}
-.modal .row.end{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
-@keyframes fade{from{opacity:0}}@keyframes pop{from{opacity:0;transform:translateY(8px)}}
-.big-code{font-size:30px;letter-spacing:7px;font-weight:600;text-align:center;font-family:var(--mono);padding:18px;background:var(--panel2);border:1px dashed var(--line2);color:var(--text);border-radius:10px;margin:12px 0}
-#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:8px;display:none;max-width:min(520px,92vw);z-index:40;box-shadow:var(--shadow2);font-weight:500;font-size:13px}
-#toast.bad{background:var(--bad);color:#fff}
-details summary{cursor:pointer;color:var(--muted);font-weight:500;margin-bottom:10px;font-size:13px}
-details summary:hover{color:var(--text)}
-.reply{white-space:pre-wrap;line-height:1.7;font-size:14px}
-.gen{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}.gen img{width:100%;border-radius:8px;border:1px solid var(--line);display:block;background:var(--panel2)}
-.vec{font-family:var(--mono);font-size:12px;color:var(--text2);word-break:break-all}
-
-/* login */
-.login-wrap{min-height:100vh;display:grid;grid-template-columns:1.05fr 1fr}
-.login-art{background:var(--side);border-right:1px solid var(--line);padding:44px 52px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
-.login-art .brand{padding:0}
-.login-art h2{font-size:34px;line-height:1.15;letter-spacing:-.04em;font-weight:700;max-width:420px;margin:0 0 14px}
-.login-art h2 span{color:var(--accent-hi)}
-.login-art p{color:var(--muted);max-width:400px;margin:0}
-.login-art ul{list-style:none;padding:0;margin:28px 0 0;display:grid;gap:10px;font-size:13px;color:var(--text2)}
-.login-art li{display:flex;gap:10px;align-items:center}.login-art li i{width:6px;height:6px;border-radius:50%;background:var(--sa)}
-.login-art .slice{position:absolute;right:-90px;bottom:-90px;width:320px;height:320px;border-radius:50%;border:44px solid var(--accent-weak);opacity:.9}
-.login-art .slice::after{content:"";position:absolute;inset:40px;border-radius:50%;border:2px dashed var(--line2)}
-.login-art small{color:var(--faint);font-family:var(--mono);font-size:11.5px}
-.login-form{display:grid;place-items:center;padding:32px 20px}
-.login-form form{width:100%;max-width:340px}
-.login-form h1{font-size:22px}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}.kv span{color:var(--muted)}
-
-@media (max-width:1000px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi:nth-child(3){border-left:0}.kpi:nth-child(n+3){border-top:1px solid var(--line)}
-  .steps{grid-template-columns:1fr}.step+.step{border-left:0;border-top:1px solid var(--line)}
-  .login-wrap{grid-template-columns:1fr}.login-art{display:none}}
-@media (max-width:760px){
-  .layout{display:block}
-  nav.side{position:fixed;bottom:0;top:auto;left:0;right:0;height:auto;width:auto;flex-direction:row;padding:6px 4px calc(6px + env(safe-area-inset-bottom));border-right:0;border-top:1px solid var(--line);z-index:15;justify-content:space-around;background:color-mix(in srgb,var(--side) 92%,transparent);backdrop-filter:blur(10px)}
-  nav.side .brand,nav.side .navgroup,nav.side .foot{display:none}
-  nav.side button[data-tab]{flex-direction:column;gap:3px;font-size:10.5px;padding:6px 2px;width:auto;flex:1;align-items:center;margin:0}
-  nav.side button[data-tab].active{box-shadow:none;background:none;color:var(--accent)}
-  nav.side button[data-tab].active::before{left:30%;right:30%;top:-6px;bottom:auto;width:auto;height:2px;border-radius:0 0 2px 2px}
-  nav.side button[data-tab] .lbl-long{display:none}
-  main{padding:18px 16px 96px}
-  .mobilebar{display:flex!important}
-  h1{font-size:21px}
-  th,td{padding:10px 14px}
-  .kpi{padding:14px 16px}.kpi .v{font-size:24px}
-  .mini{min-width:50%;padding:9px 16px}.mini:nth-child(odd){border-left:0}.mini:nth-child(n+3){border-top:1px solid var(--line)}
-  .conn{flex-wrap:wrap}.conn .acts{width:100%;padding-left:19px}
-  .prov-h{flex-wrap:wrap}.prov-h .acts{width:100%}
-  .prov .chips,.prov .conns{margin-left:0!important}
-  #toast{bottom:84px}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #10161C; --panel: #171F26; --sunk: #131A20; --hover: #1D262E;
+    --ink: #E4E9ED; --ink-2: #A9B4BE; --ink-3: #8A96A1; --line: #27323C; --line-2: #202A33;
+    --accent: #49B4C0; --accent-ink: #062629; --accent-soft: #15353A; --accent-text: #7FD0D9;
+    --ok: #4CC27E; --ok-soft: #173326; --warn: #E0A63A; --warn-soft: #3A2D14; --bad: #EF6A5E; --bad-soft: #3D1D1A;
+    --off: #56626D; --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
+  }
 }
-@media (min-width:761px){nav.side .lbl-short{display:none}}
-.mobilebar{display:none;align-items:center;justify-content:space-between;margin:-2px 0 16px}
-.mobilebar .row{gap:6px}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #10161C; --panel: #171F26; --sunk: #131A20; --hover: #1D262E;
+  --ink: #E4E9ED; --ink-2: #A9B4BE; --ink-3: #8A96A1; --line: #27323C; --line-2: #202A33;
+  --accent: #49B4C0; --accent-ink: #062629; --accent-soft: #15353A; --accent-text: #7FD0D9;
+  --ok: #4CC27E; --ok-soft: #173326; --warn: #E0A63A; --warn-soft: #3A2D14; --bad: #EF6A5E; --bad-soft: #3D1D1A;
+  --off: #56626D; --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: var(--accent-text); }
+button, input, select, textarea { font: inherit; color: inherit; }
+h1, h2, h3 { margin: 0; line-height: 1.25; }
+h1 { font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
+h2 { font-size: 16px; font-weight: 620; }
+h3 { font-size: 14px; font-weight: 620; }
+p { margin: 0; }
+.hide { display: none !important; }
+.mono { font-family: var(--mono); font-size: .92em; }
+.muted { color: var(--ink-3); }
+.soft { color: var(--ink-2); }
+.bad { color: var(--bad); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.row.end { justify-content: flex-end; }
+.row.between { justify-content: space-between; }
+.grow { flex: 1; min-width: 0; }
+.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- shell */
+.shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+.rail { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 2px; padding: 20px 12px 16px;
+  border-right: 1px solid var(--line); background: var(--panel); }
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 18px; }
+.brand-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
+.brand b { display: block; font-size: 15px; letter-spacing: -.01em; }
+.brand small { display: block; color: var(--ink-3); font-size: 12px; }
+.nav-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: var(--r-s);
+  background: none; color: var(--ink-2); cursor: pointer; text-align: left; }
+.nav-btn:hover { background: var(--hover); color: var(--ink); }
+.nav-btn[aria-current="page"] { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+.nav-btn .count { margin-left: auto; font-size: 12px; color: var(--bad); font-weight: 600; }
+.rail-foot { margin-top: auto; display: flex; gap: 4px; padding-top: 12px; border-top: 1px solid var(--line-2); }
+.main { min-width: 0; padding: 28px 32px 64px; }
+.page { max-width: 1120px; margin: 0 auto; }
+.page-h { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.page-h p { color: var(--ink-2); margin-top: 4px; max-width: 64ch; }
+.topbar { display: none; }
+.tabbar { display: none; }
+
+/* ---------- surfaces */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-m); }
+.panel + .panel, .block + .block { margin-top: 16px; }
+.panel-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid var(--line-2); }
+.panel-b { padding: 16px 18px; }
+.sec-h { display: flex; align-items: baseline; gap: 10px; margin: 28px 0 10px; }
+.sec-h h2 { font-size: 15px; }
+.sec-h .muted { font-size: 13px; }
+
+/* ---------- controls */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 14px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--panel); color: var(--ink); cursor: pointer; white-space: nowrap; font-weight: 520; text-decoration: none; }
+.btn:hover { background: var(--hover); }
+.btn:disabled { opacity: .55; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.ghost { border-color: transparent; background: none; }
+.btn.ghost:hover { background: var(--hover); }
+.btn.danger { color: var(--bad); }
+.btn.sm { height: 28px; padding: 0 10px; font-size: 13px; border-radius: 7px; }
+.btn.icon { width: 34px; padding: 0; }
+.btn.icon.sm { width: 28px; }
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunk); }
+.seg button { height: 28px; padding: 0 12px; border: 0; border-radius: 6px; background: none; color: var(--ink-2); cursor: pointer; font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 600; }
+label.f { display: block; margin-bottom: 14px; }
+label.f > span { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 560; color: var(--ink-2); }
+input[type=text], input[type=password], input[type=number], input[type=search], select, textarea {
+  width: 100%; min-height: 36px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+textarea { min-height: 84px; resize: vertical; font-family: var(--mono); font-size: 13px; line-height: 1.45; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.hint { margin-top: 6px; font-size: 12.5px; color: var(--ink-3); }
+.switch { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; cursor: pointer; }
+.switch input { width: 34px; height: 20px; appearance: none; border-radius: 99px; background: var(--line); position: relative; cursor: pointer; flex: none; margin: 0; transition: background .15s; }
+.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.switch input:checked { background: var(--accent); }
+.switch input:checked::after { transform: translateX(14px); }
+.switch small { display: block; color: var(--ink-3); font-size: 12.5px; }
+
+/* ---------- status */
+.lamp { width: 8px; height: 8px; border-radius: 50%; background: var(--off); flex: none; }
+.lamp.ok { background: var(--ok); } .lamp.cooldown { background: var(--warn); } .lamp.error { background: var(--bad); }
+.tag { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 99px; font-size: 12px; font-weight: 560;
+  background: var(--sunk); color: var(--ink-2); white-space: nowrap; }
+.tag.ok { background: var(--ok-soft); color: var(--ok); } .tag.cooldown { background: var(--warn-soft); color: var(--warn); }
+.tag.error { background: var(--bad-soft); color: var(--bad); } .tag.accent { background: var(--accent-soft); color: var(--accent-text); }
+.tag.line { background: none; border: 1px solid var(--line); }
+.chip { display: inline-flex; align-items: center; max-width: 100%; height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 99px;
+  background: var(--panel); font: 12.5px var(--mono); color: var(--ink-2); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip:hover { border-color: var(--accent); color: var(--ink); }
+.chip.auto { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); }
+.chip.dashed { border-style: dashed; cursor: default; }
+.chip.add { font-family: var(--sans); color: var(--accent-text); border-style: dashed; }
+.chip-in { height: 26px; min-height: 26px !important; width: 220px !important; border-radius: 99px !important; padding: 0 10px !important; font: 12.5px var(--mono) !important; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.alert { display: flex; gap: 10px; padding: 12px 14px; border-radius: var(--r-m); background: var(--warn-soft); color: var(--ink); font-size: 13.5px; }
+.alert .i { color: var(--warn); margin-top: 2px; }
+.alert.info { background: var(--accent-soft); } .alert.info .i { color: var(--accent-text); }
+.alert.bad { background: var(--bad-soft); } .alert.bad .i { color: var(--bad); }
+.alert + .alert { margin-top: 8px; }
+.empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 16px; color: var(--ink-3); text-align: center; }
+.empty .i { width: 22px; height: 22px; }
+
+/* ---------- signal board (overview hero) */
+.board { padding: 18px; }
+.board-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.board-sum { font-size: 15px; }
+.board-sum b { font-size: 26px; font-weight: 680; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin-right: 4px; }
+.siglines { display: grid; gap: 10px; }
+.sigline { display: grid; grid-template-columns: minmax(120px, 230px) 1fr; align-items: center; gap: 14px; }
+.line-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 560; }
+.line-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cells { display: flex; gap: 4px; flex-wrap: wrap; }
+.cell { width: 28px; height: 22px; border-radius: 4px; border: 0; padding: 0; background: var(--off); cursor: pointer; position: relative; }
+.cell.ok { background: var(--ok); } .cell.cooldown { background: var(--warn); } .cell.error { background: var(--bad); }
+.cell.disabled { background: none; border: 1.5px dashed var(--off); }
+.cell:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
+.cell.error::after { content: "!"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font: 700 13px var(--sans); }
+.cell.cooldown { background: repeating-linear-gradient(135deg, var(--warn) 0 4px, color-mix(in srgb, var(--warn) 55%, var(--panel)) 4px 8px); }
+.skip { position: absolute; left: 12px; top: -48px; z-index: 100; padding: 8px 12px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); }
+.skip:focus { top: 12px; }
+.skel { display: grid; gap: 10px; padding: 18px; }
+.skel i { display: block; height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--line-2), var(--sunk), var(--line-2)); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
+.skel i:nth-child(2) { width: 70%; } .skel i:nth-child(3) { width: 45%; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.err-state { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 16px; text-align: center; }
+.err-state .i { color: var(--bad); width: 22px; height: 22px; }
+.modal-x { position: absolute; right: 12px; top: 12px; }
+.modal { position: relative; }
+@media (pointer: coarse) {
+  .btn, .seg button { min-height: 40px; }
+  .btn.sm { height: 36px; }
+  .btn.icon { width: 40px; }
+  .chip { height: 34px; }
+  .cell { width: 34px; height: 30px; }
+  .tabbar button { min-height: 50px; }
+  .nav-btn { min-height: 44px; }
+}
+.board-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; font-size: 12.5px; color: var(--ink-3); }
+.board-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.board-legend i { width: 12px; height: 10px; border-radius: 2px; display: inline-block; }
+.fix-list { margin-top: 14px; border-top: 1px solid var(--line-2); padding-top: 12px; display: grid; gap: 8px; }
+.fix { display: flex; align-items: flex-start; gap: 10px; }
+.fix .grow div:last-child { color: var(--ink-3); font-size: 12.5px; overflow-wrap: anywhere; }
+
+.figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line-2); }
+.fig { padding: 14px 18px; border-left: 1px solid var(--line-2); }
+.fig:first-child { border-left: 0; }
+.fig small { display: block; color: var(--ink-3); font-size: 12.5px; }
+.fig b { display: block; font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; margin-top: 2px; }
+.fig b em { font-style: normal; font-size: 13px; font-weight: 500; color: var(--ink-3); margin-left: 2px; }
+
+.chart { display: flex; align-items: flex-end; gap: 2px; height: 140px; padding: 0 2px 0 28px; position: relative; }
+.chart .col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; min-width: 2px; border-radius: 2px; }
+.chart .col:hover { background: var(--hover); }
+.chart .ok { background: var(--accent); border-radius: 2px 2px 0 0; opacity: .85; }
+.chart .err { background: var(--bad); }
+.axis { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: var(--ink-3); }
+.gl { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); pointer-events: none; }
+.gl span { position: absolute; left: 0; top: -9px; font-size: 11px; color: var(--ink-3); background: var(--panel); padding-right: 4px; }
+#tip { position: fixed; z-index: 60; padding: 8px 10px; border-radius: 8px; background: var(--ink); color: var(--bg); font-size: 12.5px; pointer-events: none; line-height: 1.5; }
+
+/* ---------- tables */
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 12.5px; font-weight: 560; color: var(--ink-3); padding: 9px 12px; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+td { padding: 10px 12px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--sunk); }
+.bar { display: inline-block; width: 64px; height: 6px; border-radius: 99px; background: var(--line-2); overflow: hidden; vertical-align: middle; margin-right: 8px; }
+.bar i { display: block; height: 100%; }
+
+/* ---------- providers */
+.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.toolbar input[type=search] { max-width: 300px; }
+.prov { border-bottom: 1px solid var(--line-2); }
+.prov:last-child { border-bottom: 0; }
+.prov-h { display: flex; gap: 12px; align-items: flex-start; padding: 16px 18px 10px; }
+.prov-ic { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; background: var(--sunk); border: 1px solid var(--line); font-weight: 650; font-size: 13px; color: var(--ink-2); flex: none; }
+.prov-ic.on { background: var(--accent-soft); border-color: transparent; color: var(--accent-text); }
+.prov-t { flex: 1; min-width: 0; }
+.prov-t .row { gap: 6px 8px; }
+.prov-note { margin-top: 4px; color: var(--ink-3); font-size: 12.5px; max-width: 80ch; }
+.prov-models { padding: 0 18px 12px 66px; }
+.accts { margin: 0 18px 16px 66px; border: 1px solid var(--line-2); border-radius: var(--r-m); background: var(--sunk); }
+.acct { display: flex; gap: 12px; align-items: flex-start; padding: 11px 14px; border-bottom: 1px solid var(--line-2); }
+.acct:last-child { border-bottom: 0; }
+.acct .lamp { margin-top: 7px; }
+.acct-meta { font-size: 12.5px; color: var(--ink-3); margin-top: 1px; overflow-wrap: anywhere; }
+.acct-err { margin-top: 6px; font-size: 12.5px; color: var(--bad); overflow-wrap: anywhere; }
+.acct-warn { margin-top: 6px; font-size: 12.5px; color: var(--warn); }
+.acct-acts { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0; }
+.cat { display: flex; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line-2); border-right: 1px solid var(--line-2); }
+.cat p { font-size: 12.5px; color: var(--ink-3); margin: 3px 0 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---------- combos & misc */
+.flow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.flow .arrow { color: var(--ink-3); }
+.chip.badref { color: var(--bad); border-color: var(--bad); }
+.code { position: relative; margin: 0; padding: 12px 14px; border-radius: 8px; background: var(--sunk); border: 1px solid var(--line-2); font: 12.5px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.big-code { margin: 10px 0 16px; padding: 14px; text-align: center; font: 600 28px var(--mono); letter-spacing: .12em; border-radius: var(--r-m); background: var(--sunk); border: 1px dashed var(--line); }
+.steps { margin: 0 0 14px; padding-left: 20px; color: var(--ink-2); }
+.steps li { margin-bottom: 6px; }
+.reply { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.gen { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.gen img { width: 100%; border-radius: 8px; display: block; }
+.vec { font: 12.5px var(--mono); overflow-wrap: anywhere; }
+details summary { cursor: pointer; color: var(--ink-2); font-size: 13px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+
+/* ---------- modal + toast */
+.modal-bg { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgba(16, 22, 28, .45); overflow-y: auto; }
+.modal { width: 100%; max-width: 560px; padding: 22px; border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); border: 1px solid var(--line); }
+.modal.wide { max-width: 720px; }
+.modal-h { margin-bottom: 16px; }
+.modal-h p { color: var(--ink-2); margin-top: 4px; font-size: 13.5px; }
+.modal .foot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.modal .foot .left { margin-right: auto; }
+.mtabs { display: flex; gap: 4px; margin: 0 0 16px; border-bottom: 1px solid var(--line); }
+.mtabs button { white-space: nowrap; padding: 8px 12px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--ink-2); cursor: pointer; margin-bottom: -1px; }
+.mtabs button[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--ink); font-weight: 600; }
+.result { margin-top: 12px; }
+#toast { position: fixed; left: 50%; bottom: 24px; z-index: 70; transform: translateX(-50%); max-width: min(560px, calc(100vw - 32px)); padding: 10px 16px;
+  border-radius: 10px; background: var(--ink); color: var(--bg); font-size: 13.5px; box-shadow: var(--shadow); display: none; }
+#toast.bad { background: var(--bad); color: #fff; }
+
+/* ---------- login */
+.login { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+.login-box { width: 100%; max-width: 360px; }
+.login-box .brand { padding: 0 0 22px; }
+.login-box .panel { padding: 22px; }
+
+/* ---------- mobile */
+@media (max-width: 760px) {
+  .shell { display: block; }
+  .rail { display: none; }
+  .topbar { display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 20; padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
+    background: var(--panel); border-bottom: 1px solid var(--line); }
+  .topbar .brand { padding: 0; }
+  .topbar .row { margin-left: auto; gap: 2px; }
+  .main { padding: 18px 14px calc(88px + env(safe-area-inset-bottom, 0px)); }
+  .tabbar { display: grid; grid-template-columns: repeat(6, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--line); }
+  .tabbar button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; white-space: nowrap; border: 0; background: none; color: var(--ink-3); font-size: 11px; cursor: pointer; position: relative; }
+  .tabbar button .i { width: 20px; height: 20px; }
+  .tabbar button[aria-current="page"] { color: var(--accent-text); font-weight: 600; }
+  .tabbar .count { position: absolute; top: 2px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; background: var(--bad); color: #fff; font-size: 10.5px; line-height: 16px; }
+  h1 { font-size: 20px; }
+  .page-h { margin-bottom: 14px; }
+  .figures { grid-template-columns: 1fr 1fr; }
+  .fig:nth-child(3) { border-left: 0; }
+  .fig:nth-child(n+3) { border-top: 1px solid var(--line-2); }
+  .sigline { grid-template-columns: minmax(0, 42%) 1fr; gap: 10px; }
+  .fix { flex-wrap: wrap; }
+  .fix .acct-acts { width: 100%; padding-left: 18px; justify-content: flex-start; }
+  .prov-h { padding: 14px 14px 8px; flex-wrap: wrap; }
+  .prov-h > .row { width: 100%; padding-left: 48px; }
+  .prov-models { padding: 0 14px 10px; }
+  .accts { margin: 0 14px 14px; }
+  .acct { flex-wrap: wrap; }
+  .acct-acts { width: 100%; justify-content: flex-start; padding-left: 20px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .modal-bg { place-items: end center; padding: 0; }
+  .modal { max-width: none; border-radius: 16px 16px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom, 0px)); max-height: 92vh; overflow-y: auto; }
+  #toast { bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+  .hide-m { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute">
-  <symbol id="i-home" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
-  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0z"/><path d="M12 18v4"/></symbol>
+<a class="skip" href="#main">Bỏ qua điều hướng</a>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0zM12 17v5"/></symbol>
   <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H16a3.5 3.5 0 0 0 0-7H8a3.5 3.5 0 0 1 0-7h7.5"/></symbol>
-  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></symbol>
-  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 10h8"/></symbol>
-  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
-  <symbol id="i-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
-  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
-  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M7 17L17 7M8 7h9v9"/></symbol>
-  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></symbol>
-  <symbol id="i-send" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
-  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M3 13h5l1 3h6l1-3h5"/></symbol>
-  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></symbol>
-  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.7-8.7M16 7l3 3M14 9l2 2"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
-  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
-  <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></symbol>
-  <symbol id="logo" viewBox="0 0 24 24"><path d="M7 6v6.5a5 5 0 0 0 10 0V6" stroke="var(--logo-u)" stroke-width="2.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="6" r="2" fill="var(--logo-dot)"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20zM12 10v4M12 17.5v.5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5L16 13h5M5.5 5h13L21 13v6H3v-6z"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></symbol>
 </svg>
 
-<div id="login" class="hide">
-  <div class="login-wrap">
-    <div class="login-art">
-      <div class="brand"><div class="logo"><svg><use href="#logo"/></svg></div><div><b>UniRouter</b><small>self-hosted ai gateway</small></div></div>
-      <div>
-        <h2>Một cổng cho mọi model, <span>tự chuyển</span> khi có lỗi.</h2>
-        <p>ChatGPT, NVIDIA, Groq, OpenRouter, Gemini… gom về một địa chỉ, một API key cho bot và công cụ của bạn.</p>
-        <ul><li><i></i>Tương thích OpenAI, Anthropic và Responses API</li><li><i></i>Xoay vòng key, tạm ngắt tài khoản lỗi</li><li><i></i>Dữ liệu nằm trên máy chủ của bạn (SQLite)</li></ul>
-      </div>
-      <small id="loginVer">unirouter</small>
-      <div class="slice"></div>
-    </div>
-    <div class="login-form">
+<div id="login" class="login hide">
+  <div class="login-box">
+    <div class="brand"><div class="brand-mark"><svg class="i"><use href="#i-route"/></svg></div><div><b>UniRouter</b><small id="loginVer">Cổng AI tự host</small></div></div>
+    <div class="panel">
+      <h2 style="margin-bottom:4px">Đăng nhập quản trị</h2>
+      <p class="soft" style="margin-bottom:18px;font-size:13.5px">Dùng ADMIN_USERNAME và ADMIN_PASSWORD đã đặt trong biến môi trường.</p>
+      <div id="loginMsg" class="alert bad hide" style="margin-bottom:14px"></div>
       <form id="loginForm">
-        <div class="brand" style="padding:0 0 22px"><div class="logo"><svg><use href="#logo"/></svg></div></div>
-        <h1>Đăng nhập</h1><p class="sub" style="margin-bottom:22px">Trang quản trị UniRouter</p>
-        <div id="loginMsg" class="alert hide"></div>
-        <label class="f"><span>Tài khoản</span><input type="text" id="lu" value="admin" autocomplete="username"></label>
-        <label class="f"><span>Mật khẩu</span><input type="password" id="lp" autocomplete="current-password" autofocus></label>
-        <button class="btn primary" style="width:100%;justify-content:center;padding:10px;margin-top:4px">Đăng nhập</button>
+        <label class="f"><span>Tài khoản</span><input type="text" id="lu" value="admin" autocomplete="username" required></label>
+        <label class="f"><span>Mật khẩu</span><input type="password" id="lp" autocomplete="current-password" required></label>
+        <button class="btn primary" style="width:100%" type="submit">Đăng nhập</button>
       </form>
     </div>
   </div>
 </div>
 
-<div id="app" class="layout hide">
-  <nav class="side">
-    <div class="brand"><div class="logo"><svg><use href="#logo"/></svg></div><div><b>UniRouter</b><small id="ver">ai gateway</small></div></div>
-    <div class="navgroup">Giám sát</div>
-    <button data-tab="overview" class="active"><svg class="i"><use href="#i-home"/></svg><span class="lbl-long">Tổng quan</span><span class="lbl-short">Tổng quan</span></button>
-    <button data-tab="playground"><svg class="i"><use href="#i-flask"/></svg><span class="lbl-long">Thử nghiệm</span><span class="lbl-short">Thử</span></button>
-    <div class="navgroup">Cấu hình</div>
-    <button data-tab="providers"><svg class="i"><use href="#i-plug"/></svg><span class="lbl-long">Providers</span><span class="lbl-short">Provider</span></button>
-    <button data-tab="combos"><svg class="i"><use href="#i-route"/></svg><span class="lbl-long">Combo / Alias</span><span class="lbl-short">Combo</span></button>
-    <button data-tab="keys"><svg class="i"><use href="#i-key"/></svg><span class="lbl-long">API Keys</span><span class="lbl-short">Keys</span></button>
-    <button data-tab="settings"><svg class="i"><use href="#i-gear"/></svg><span class="lbl-long">Cài đặt</span><span class="lbl-short">Cài đặt</span></button>
-    <div class="foot"><div class="avatar">AD</div><div class="who"><b>admin</b><span class="muted">Quản trị viên</span></div>
-      <button class="iconbtn themeBtn" title="Giao diện"><svg class="i"><use href="#i-auto"/></svg></button>
-      <button class="iconbtn" id="logout" title="Đăng xuất"><svg class="i"><use href="#i-out"/></svg></button></div>
-  </nav>
-  <main><div class="wrap">
-    <div class="mobilebar"><div class="brand" style="padding:0"><div class="logo"><svg><use href="#logo"/></svg></div><b>UniRouter</b></div>
-      <div class="row"><button class="iconbtn themeBtn" title="Giao diện"><svg class="i"><use href="#i-auto"/></svg></button>
-      <button class="iconbtn" id="logout2" title="Đăng xuất"><svg class="i"><use href="#i-out"/></svg></button></div></div>
+<div id="app" class="shell hide">
+  <aside class="rail">
+    <div class="brand"><div class="brand-mark"><svg class="i"><use href="#i-route"/></svg></div><div><b>UniRouter</b><small id="ver">Cổng AI tự host</small></div></div>
+    <nav id="railNav" aria-label="Điều hướng"></nav>
+    <div class="rail-foot">
+      <button class="btn ghost icon themeBtn" title="Giao diện" aria-label="Đổi giao diện sáng tối"><svg class="i"><use href="#i-auto"/></svg></button>
+      <button class="btn ghost grow logoutBtn" style="justify-content:flex-start"><svg class="i"><use href="#i-out"/></svg>Đăng xuất</button>
+    </div>
+  </aside>
 
-    <!-- OVERVIEW -->
-    <section id="tab-overview">
-      <div class="pagehead"><div><h1>Tổng quan</h1><p class="sub">Lưu lượng, độ ổn định và lượng token qua gateway.</p></div>
-        <div class="seg" id="hoursSeg"><button data-h="1">1 giờ</button><button data-h="24" class="on">24 giờ</button><button data-h="168">7 ngày</button></div>
-        <select id="hours" class="hide"><option value="1">1</option><option value="24" selected>24</option><option value="168">168</option></select></div>
-      <div id="warns"></div>
-      <div class="card"><div class="kpis" id="stats"></div><div class="minis" id="minis"></div></div>
-      <div class="card">
-        <div class="card-h"><h2>Request theo thời gian</h2><div class="row" style="gap:16px"><div class="legend"><span><i style="background:var(--s-ok)"></i>Thành công</span><span><i style="background:var(--s-err)"></i>Lỗi</span></div><span class="muted" id="chartInfo" style="font-size:12px"></span></div></div>
-        <div class="chartwrap"><div class="chart" id="chart"></div><div class="axis" id="axis"></div></div>
+  <header class="topbar">
+    <div class="brand"><div class="brand-mark" style="width:26px;height:26px"><svg class="i"><use href="#i-route"/></svg></div><b>UniRouter</b></div>
+    <div class="row">
+      <button class="btn ghost icon themeBtn" title="Giao diện" aria-label="Đổi giao diện sáng tối"><svg class="i"><use href="#i-auto"/></svg></button>
+      <button class="btn ghost icon logoutBtn" title="Đăng xuất" aria-label="Đăng xuất"><svg class="i"><use href="#i-out"/></svg></button>
+    </div>
+  </header>
+
+  <main class="main" id="main" tabindex="-1">
+    <!-- Tổng quan -->
+    <section class="page" id="tab-overview">
+      <div class="page-h">
+        <div><h1>Tổng quan</h1><p>Tình trạng từng tài khoản và lưu lượng đi qua cổng.</p></div>
+        <div class="seg" id="hoursSeg" role="group" aria-label="Khoảng thời gian">
+          <button data-h="1">1 giờ</button><button data-h="24" aria-pressed="true">24 giờ</button><button data-h="168">7 ngày</button>
+        </div>
       </div>
-      <div class="card"><div class="card-h"><h2>Theo model</h2></div><div class="tbl"><table id="byModel"></table></div></div>
-      <div class="card"><div class="card-h"><h2>Request gần đây</h2><span class="muted" style="font-size:12px">Tự làm mới mỗi 30 giây</span></div><div class="tbl"><table id="recent"></table></div></div>
+      <div id="ovStart"></div>
+      <div class="panel">
+        <div class="board" id="board"></div>
+        <div class="figures" id="figures"></div>
+      </div>
+      <div id="ovWarns" style="margin-top:16px"></div>
+      <div class="panel" style="margin-top:16px">
+        <div class="panel-h"><h2>Request theo thời gian</h2><span class="muted" id="chartInfo" style="font-size:12.5px"></span></div>
+        <div class="panel-b"><div class="chart" id="chart"></div><div class="axis" id="axis"></div></div>
+      </div>
+      <div class="sec-h"><h2>Theo model</h2></div>
+      <div class="panel tbl-wrap" tabindex="0" aria-label="Bảng theo model"><table id="byModel"></table></div>
+      <div class="sec-h"><h2>Request gần đây</h2><span class="muted">60 request mới nhất</span></div>
+      <div class="panel tbl-wrap" tabindex="0" aria-label="Bảng request gần đây"><table id="recent"></table></div>
     </section>
 
-    <!-- PROVIDERS -->
-    <section id="tab-providers" class="hide">
-      <div class="pagehead"><div><h1>Providers</h1><p class="sub">Nguồn model AI. Mỗi provider có thể có nhiều key để xoay vòng; model <span class="mono">auto</span> dùng tất cả provider đang hoạt động.</p></div>
-        <button class="btn primary" id="addProvider"><svg class="i"><use href="#i-plus"/></svg>Provider tùy chỉnh</button></div>
-      <div id="providerList"></div>
+    <!-- Nguồn AI -->
+    <section class="page hide" id="tab-providers">
+      <div class="page-h">
+        <div><h1>Nguồn AI</h1><p>Tài khoản và API key mà UniRouter dùng để trả lời. Nhiều tài khoản cùng nguồn sẽ tự xoay vòng khi một cái lỗi hoặc hết hạn mức.</p></div>
+        <button class="btn" id="addCustom"><svg class="i"><use href="#i-plus"/></svg>Nguồn tùy chỉnh</button>
+      </div>
+      <div class="toolbar"><input type="search" id="provSearch" placeholder="Tìm nguồn hoặc model…" aria-label="Tìm nguồn"></div>
+      <div id="provActive"></div>
+      <div class="sec-h" id="catHead"><h2>Thêm nguồn</h2><span class="muted">Bấm “Lấy key” để đăng ký, rồi dán key vào</span></div>
+      <div class="panel"><div class="catalog" id="provCatalog"></div></div>
     </section>
 
-    <!-- COMBOS -->
-    <section id="tab-combos" class="hide">
-      <div class="pagehead"><div><h1>Combo / Alias</h1><p class="sub">Tên model ảo trỏ tới nhiều model thật. Không bắt buộc: model <span class="mono">auto</span> đã tự định tuyến.</p></div>
-        <button class="btn primary" id="addCombo"><svg class="i"><use href="#i-plus"/></svg>Tạo combo</button></div>
+    <!-- Combo -->
+    <section class="page hide" id="tab-combos">
+      <div class="page-h">
+        <div><h1>Combo</h1><p>Đặt một tên model riêng trỏ tới nhiều đích. Client gọi tên combo như gọi một model bình thường.</p></div>
+        <button class="btn primary" id="addCombo"><svg class="i"><use href="#i-plus"/></svg>Tạo combo</button>
+      </div>
       <div id="comboList"></div>
     </section>
 
-    <!-- KEYS -->
-    <section id="tab-keys" class="hide">
-      <div class="pagehead"><div><h1>API Keys</h1><p class="sub">Mỗi bot hoặc ứng dụng một key. Key chỉ hiện đầy đủ một lần lúc tạo.</p></div>
-        <button class="btn primary" id="addKey"><svg class="i"><use href="#i-plus"/></svg>Tạo key</button></div>
-      <div class="card"><div class="tbl"><table id="keyTable"></table></div></div>
+    <!-- API key -->
+    <section class="page hide" id="tab-keys">
+      <div class="page-h">
+        <div><h1>API key</h1><p>Key mà bot và ứng dụng dùng để gọi vào UniRouter. Mỗi bot nên có một key riêng để dễ theo dõi và thu hồi.</p></div>
+        <button class="btn primary" id="addKey"><svg class="i"><use href="#i-plus"/></svg>Tạo key</button>
+      </div>
+      <div class="panel tbl-wrap" id="keyWrap" tabindex="0" aria-label="Bảng API key"><table id="keyTable"></table></div>
     </section>
 
-    <!-- PLAYGROUND -->
-    <section id="tab-playground" class="hide">
-      <div class="pagehead"><div><h1>Thử nghiệm</h1><p class="sub">Gửi thử qua router để kiểm tra định tuyến và phản hồi.</p></div>
-        <div class="seg" id="pgMode"><button data-m="chat" class="on">Chat</button><button data-m="image">Tạo ảnh</button><button data-m="embed">Embedding</button></div></div>
-      <div class="card"><div class="card-b">
-        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
-          <label class="f"><span>Model hoặc combo</span><input type="text" id="pgModel" list="modelOptions" value="auto" placeholder="auto, cx/gpt-5.6-sol, tên combo…"></label>
-          <label class="f pg-chat"><span>System prompt <span class="muted" style="font-weight:400">· tùy chọn</span></span><input type="text" id="pgSystem" placeholder="Bạn là trợ lý…"></label>
+    <!-- Thử nghiệm -->
+    <section class="page hide" id="tab-playground">
+      <div class="page-h">
+        <div><h1>Thử nghiệm</h1><p>Gửi thử qua đúng đường mà client đi: chọn model, xem đích thực tế và các lần chuyển nguồn.</p></div>
+        <div class="seg" id="pgMode" role="group" aria-label="Loại yêu cầu">
+          <button data-m="chat" aria-pressed="true">Chat</button><button data-m="image">Tạo ảnh</button><button data-m="embed">Embedding</button>
+        </div>
+      </div>
+      <div class="panel"><div class="panel-b">
+        <div class="form-grid">
+          <label class="f"><span>Model hoặc combo</span><input type="text" id="pgModel" list="modelOptions" value="auto" autocomplete="off" spellcheck="false"></label>
+          <label class="f pg-chat"><span>System prompt (tùy chọn)</span><input type="text" id="pgSystem" placeholder="vd: Trả lời ngắn gọn bằng tiếng Việt"></label>
           <label class="f pg-image hide"><span>Kích thước</span><select id="pgSize"><option value="">Mặc định</option><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option></select></label>
         </div>
-        <label class="f"><span id="pgMsgLbl">Tin nhắn</span><textarea id="pgMsg" style="font-family:var(--sans);font-size:14px;min-height:96px">Xin chào! Bạn là model nào?</textarea></label>
-        <div class="row between"><span class="muted" style="font-size:12px">Ctrl + Enter để gửi</span><button class="btn primary" id="pgSend"><svg class="i"><use href="#i-send"/></svg>Gửi</button></div>
+        <label class="f"><span id="pgMsgLbl">Tin nhắn</span><textarea id="pgMsg" style="font-family:var(--sans);font-size:14px;min-height:100px">Xin chào! Bạn là model nào?</textarea></label>
+        <div class="row between"><span class="muted hide-m" style="font-size:12.5px">Ctrl + Enter để gửi</span><button class="btn primary" id="pgSend"><svg class="i"><use href="#i-send"/></svg><span>Gửi</span></button></div>
       </div></div>
-      <div class="card hide" id="pgOut"></div>
+      <div class="panel hide" id="pgOut" style="margin-top:16px"></div>
     </section>
 
-    <!-- SETTINGS -->
-    <section id="tab-settings" class="hide">
-      <div class="pagehead"><div><h1>Cài đặt</h1><p class="sub">Áp dụng ngay, không cần khởi động lại.</p></div></div>
-      <div class="card"><div class="card-h"><h2>Định tuyến</h2></div><div class="card-b">
-        <label class="f"><span>Model mặc định</span><input type="text" id="sDefault" list="modelOptions" placeholder="để trống = auto"><div class="hint">Dùng khi client gửi tên model không tồn tại (vd bot gọi "gpt-4o", Claude Code gửi "claude-…").</div></label>
-        <label class="switch"><input type="checkbox" id="sFallback"><div><b style="font-weight:600">Tự chuyển model lạ sang model mặc định</b><div class="hint">Tắt để trả lỗi 404 khi model không tồn tại.</div></div></label>
-        <label class="switch"><input type="checkbox" id="sRtk"><div><b style="font-weight:600">RTK Token Saver</b><div class="hint">Nén output dài của tool (git diff, grep, log…) trước khi gửi lên provider.</div></div></label>
-      </div></div>
-      <div class="card"><div class="card-h"><h2>Độ ổn định & lưu trữ</h2></div><div class="card-b">
-        <div class="grid">
-          <label class="f"><span>Số lỗi liên tiếp để tạm ngắt</span><input type="number" id="sThr" min="1" max="20"></label>
-          <label class="f"><span>Thời gian tạm ngắt (giây)</span><input type="number" id="sCool" min="5" max="3600"></label>
-          <label class="f"><span>Giữ log sử dụng (ngày)</span><input type="number" id="sDays" min="1" max="90"></label>
-          <label class="f"><span>Số dòng log tối đa</span><input type="number" id="sRows" min="1000" max="500000"></label>
+    <!-- Cài đặt -->
+    <section class="page hide" id="tab-settings">
+      <div class="page-h"><div><h1>Cài đặt</h1><p>Cách định tuyến, ngắt mạch khi lỗi, lưu nhật ký, và cấu hình mẫu cho client.</p></div></div>
+      <div class="panel">
+        <div class="panel-h"><h2>Định tuyến</h2></div>
+        <div class="panel-b">
+          <label class="f"><span>Model mặc định</span><input type="text" id="sDefault" list="modelOptions" placeholder="để trống = auto"><div class="hint">Dùng khi client gửi tên model không có trong UniRouter.</div></label>
+          <label class="switch"><input type="checkbox" id="sFallback"><span>Model lạ thì chuyển sang model mặc định<small>Tắt thì UniRouter báo lỗi 404 cho model không tồn tại.</small></span></label>
+          <label class="switch"><input type="checkbox" id="sRtk"><span>Rút gọn đầu ra công cụ (RTK)<small>Cắt bớt log dài trong lượt tool để tiết kiệm token cho agent lập trình.</small></span></label>
         </div>
-        <div class="row end"><button class="btn primary" id="saveSettings"><svg class="i"><use href="#i-check"/></svg>Lưu cài đặt</button></div>
-      </div></div>
-      <div class="card"><div class="card-h"><h2>Sao lưu</h2></div><div class="card-b">
-        <div class="row between" style="align-items:flex-start;gap:16px;flex-wrap:wrap"><p class="sub" style="font-size:13px;flex:1;min-width:240px">Tải bản sao toàn bộ dữ liệu (provider, tài khoản, combo, API key, thống kê) dạng file SQLite. Token và API key trong file vẫn được mã hóa bằng <span class="mono">SECRET_KEY</span>: khôi phục ở máy khác cần đặt cùng <span class="mono">SECRET_KEY</span>.</p>
-        <a class="btn" href="/admin/api/backup" download><svg class="i"><use href="#i-down"/></svg>Tải bản sao lưu</a></div>
-      </div></div>
-      <div class="card"><div class="card-h"><h2>Kết nối client</h2></div><div class="card-b" id="howto"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h"><h2>Ngắt mạch và nhật ký</h2></div>
+        <div class="panel-b form-grid">
+          <label class="f"><span>Số lỗi liên tiếp trước khi tạm khóa</span><input type="number" id="sThr" min="1" max="20"></label>
+          <label class="f"><span>Thời gian tạm khóa (giây)</span><input type="number" id="sCool" min="5" max="3600"></label>
+          <label class="f"><span>Giữ nhật ký (ngày)</span><input type="number" id="sDays" min="1" max="90"></label>
+          <label class="f"><span>Số dòng nhật ký tối đa</span><input type="number" id="sRows" min="1000" max="500000"></label>
+        </div>
+      </div>
+      <div class="row end" style="margin-top:14px"><a class="btn" href="/admin/api/backup"><svg class="i"><use href="#i-download"/></svg>Tải bản sao dữ liệu</a><button class="btn primary" id="saveSettings">Lưu cài đặt</button></div>
+      <div class="sec-h"><h2>Kết nối client</h2><span class="muted">Thay key bằng key tạo ở mục API key</span></div>
+      <div class="panel"><div class="panel-b" id="howto"></div></div>
     </section>
-  </div></main>
-</div>
-<datalist id="modelOptions"></datalist>
-<div id="toast"></div>
-<div id="tip" class="hide"></div>
-<div id="modalRoot"></div>
+  </main>
 
+  <nav class="tabbar" id="tabBar" aria-label="Điều hướng"></nav>
+</div>
+
+<datalist id="modelOptions"></datalist>
+<div id="tip" class="hide"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="modalRoot"></div>
 <script>
+"use strict";
+// ---------------------------------------------------------------- helpers
 const $ = s => document.querySelector(s);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = n => n == null ? "–" : Number(n).toLocaleString("vi-VN");
 const compact = n => n == null ? "–" : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(".", ",") + "M" : n >= 1e4 ? Math.round(n / 1e3) + "K" : fmt(n);
-const ago = ms => { if (!ms) return "–"; const s = (Date.now() - ms) / 1000;
-  if (s < 60) return Math.max(0, Math.floor(s)) + "s trước"; if (s < 3600) return Math.floor(s/60) + " phút trước";
-  if (s < 86400) return Math.floor(s/3600) + " giờ trước"; return Math.floor(s/86400) + " ngày trước"; };
-const dur = s => s < 60 ? s + "s" : s < 3600 ? Math.ceil(s/60) + " phút" : (s/3600).toFixed(1) + " giờ";
-const icon = (id, cls = "i") => `<svg class="${cls}"><use href="#i-${id}"/></svg>`;
+const ago = ms => { if (!ms) return "chưa dùng"; const s = (Date.now() - ms) / 1000;
+  if (s < 60) return "vừa xong"; if (s < 3600) return Math.floor(s / 60) + " phút trước";
+  if (s < 86400) return Math.floor(s / 3600) + " giờ trước"; return Math.floor(s / 86400) + " ngày trước"; };
+const dur = s => s < 60 ? s + " giây" : s < 3600 ? Math.ceil(s / 60) + " phút" : (s / 3600).toFixed(1).replace(".", ",") + " giờ";
+const when = ms => new Date(ms).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const icon = id => `<svg class="i"><use href="#i-${id}"/></svg>`;
 const empty = (msg, ic = "inbox") => `<div class="empty">${icon(ic)}<div>${msg}</div></div>`;
-const HEALTH = { ok: "Khỏe", error: "Lỗi", cooldown: "Tạm khóa", disabled: "Đã tắt" };
 const initials = n => String(n).replace(/[^A-Za-z0-9 ]/g, " ").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase() || "?";
-let providers = [], combos = [];
+const HEALTH = { ok: "Khỏe", error: "Lỗi", cooldown: "Tạm khóa", disabled: "Đã tắt" };
+const tag = (cls, text, title) => `<span class="tag ${cls}"${title ? ` title="${esc(title)}"` : ""}>${text}</span>`;
+let providers = [], combos = [], keys = [], current = "overview";
 
-function toast(msg, bad) { const t = $("#toast"); t.textContent = msg; t.classList.toggle("bad", !!bad);
-  t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", bad ? 5000 : 3500); }
-
+function toast(msg, bad) {
+  const t = $("#toast"); t.textContent = msg; t.classList.toggle("bad", !!bad); t.style.display = "block";
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", bad ? 6000 : 3500);
+}
 async function api(path, opts = {}) {
   const o = { method: opts.method || (opts.body !== undefined ? "POST" : "GET"), headers: { "X-Requested-With": "unirouter" } };
   if (opts.body !== undefined) { o.headers["Content-Type"] = "application/json"; o.body = JSON.stringify(opts.body); }
   const r = await fetch(path, o);
-  let data = null; try { data = await r.json(); } catch (e) {}
-  if (r.status === 401 && path !== "/admin/api/login") { showLogin(); throw new Error("Cần đăng nhập"); }
-  if (!r.ok) throw new Error((data && (data.detail || data.error?.message)) || ("HTTP " + r.status));
+  let data = null; try { data = await r.json(); } catch (e) { /* không phải JSON */ }
+  if (r.status === 401 && path !== "/admin/api/login") { showLogin(); throw new Error("Phiên đăng nhập đã hết, hãy đăng nhập lại"); }
+  if (!r.ok) throw new Error((data && (data.detail || data.error?.message)) || ("Lỗi HTTP " + r.status));
   return data;
 }
 const run = fn => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, true); } };
-
-function modal(html, onMount) {
-  const root = $("#modalRoot");
-  root.innerHTML = `<div class="modal-bg"><div class="modal" role="dialog">${html}</div></div>`;
-  const bg = root.firstChild;
-  bg.addEventListener("click", e => { if (e.target === bg) closeModal(); });
-  const first = bg.querySelector("input,textarea,select"); if (first) setTimeout(() => first.focus(), 30);
-  if (onMount) onMount(bg.firstChild);
+const skeleton = () => `<div class="panel skel" aria-busy="true" aria-label="Đang tải"><i></i><i></i><i></i></div>`;
+// Tải một trang: hiện khung chờ khi chưa có dữ liệu, hiện lỗi kèm nút thử lại nếu tải hỏng.
+const loader = (sel, fn) => async (...a) => {
+  const el = $(sel);
+  if (el && !el.innerHTML.trim()) el.innerHTML = skeleton();
+  try { await fn(...a); }
+  catch (e) {
+    if (el) el.innerHTML = `<div class="panel err-state" role="alert">${icon("alert")}<div><b>Không tải được dữ liệu.</b><div class="muted" style="margin-top:4px">${esc(e.message)}</div></div><button class="btn" onclick="openTab(current)">Thử lại</button></div>`;
+    else toast(e.message, true);
+  }
+};
+// Nút đang chạy: khóa + đổi chữ, trả lại khi xong
+async function busy(btn, text, fn) {
+  const old = btn.innerHTML; btn.disabled = true; btn.textContent = text;
+  try { return await fn(); } finally { btn.disabled = false; btn.innerHTML = old; }
 }
-function closeModal() { $("#modalRoot").innerHTML = ""; if (window._poll) { clearTimeout(window._poll); window._poll = null; } }
+window.copyText = (txt, msg) => navigator.clipboard.writeText(txt).then(() => toast(msg || "Đã copy"), () => toast("Trình duyệt không cho copy, hãy chọn và copy thủ công", true));
+
+let _opener = null;
+function modal(html, onMount, wide) {
+  const root = $("#modalRoot");
+  _opener = document.activeElement;
+  root.innerHTML = `<div class="modal-bg"><div class="modal${wide ? " wide" : ""}" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
+    <button class="btn ghost icon modal-x" aria-label="Đóng hộp thoại" onclick="closeModal()">${icon("x")}</button>${html}</div></div>`;
+  const bg = root.firstChild, box = bg.firstChild;
+  bg.addEventListener("mousedown", e => { if (e.target === bg) closeModal(); });
+  box.addEventListener("keydown", e => {  // giữ phím Tab trong hộp thoại
+    if (e.key !== "Tab") return;
+    const f = [...box.querySelectorAll("a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex='0']")];
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+  const first = box.querySelector("input:not([type=checkbox]),textarea,select"); setTimeout(() => (first || box).focus(), 30);
+  if (onMount) onMount(box);
+}
+function closeModal() {
+  $("#modalRoot").innerHTML = "";
+  if (window._poll) { clearTimeout(window._poll); window._poll = null; }
+  if (_opener && document.body.contains(_opener)) _opener.focus();
+  _opener = null;
+}
+window.closeModal = closeModal;
 document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#modalRoot").innerHTML) closeModal(); });
-window.copyText = (txt, msg) => navigator.clipboard.writeText(txt).then(() => toast(msg || "Đã copy"), () => toast("Không copy được", true));
-const mHead = (title, sub) => `<h2>${title}</h2>${sub ? `<p class="sub" style="margin-bottom:16px">${sub}</p>` : `<div style="height:10px"></div>`}`;
+const mHead = (title, sub) => `<div class="modal-h"><h2 id="modalTitle">${title}</h2>${sub ? `<p>${sub}</p>` : ""}</div>`;
 
 // ---------------------------------------------------------------- auth
-function showLogin(msg) { $("#app").classList.add("hide"); $("#login").classList.remove("hide");
-  if (msg) { $("#loginMsg").textContent = msg; $("#loginMsg").classList.remove("hide"); } }
+function showLogin(msg) {
+  $("#app").classList.add("hide"); $("#login").classList.remove("hide");
+  $("#loginMsg").classList.toggle("hide", !msg); if (msg) $("#loginMsg").textContent = msg;
+}
 $("#loginForm").addEventListener("submit", run(async e => {
   e.preventDefault();
   await api("/admin/api/login", { body: { username: $("#lu").value, password: $("#lp").value } });
   $("#lp").value = ""; start();
 }));
 const logout = run(async () => { await api("/admin/api/logout", { body: {} }); showLogin(); });
-$("#logout").addEventListener("click", logout); $("#logout2").addEventListener("click", logout);
+$$(".logoutBtn").forEach(b => b.addEventListener("click", logout));
 
-// ---------------------------------------------------------------- tabs
-let current = "overview";
-document.querySelectorAll("nav.side button[data-tab]").forEach(b => b.addEventListener("click", () => openTab(b.dataset.tab)));
+// ---------------------------------------------------------------- navigation
+const TABS = [
+  ["overview", "Tổng quan", "home"], ["providers", "Nguồn AI", "plug"], ["combos", "Combo", "route"],
+  ["keys", "API key", "key"], ["playground", "Thử nghiệm", "chat"], ["settings", "Cài đặt", "gear"]];
+const SHORT = { overview: "Tổng quan", providers: "Nguồn", combos: "Combo", keys: "Key", playground: "Thử", settings: "Cài đặt" };
+$("#railNav").innerHTML = TABS.map(([id, label, ic]) => `<button class="nav-btn" data-tab="${id}">${icon(ic)}<span>${label}</span><span class="count" data-count="${id}"></span></button>`).join("");
+$("#tabBar").innerHTML = TABS.map(([id, , ic]) => `<button data-tab="${id}">${icon(ic)}<span>${SHORT[id]}</span><span class="count hide" data-count="${id}"></span></button>`).join("");
+$$("[data-tab]").forEach(b => b.addEventListener("click", () => openTab(b.dataset.tab)));
+function setCount(tab, n) {
+  $$(`[data-count="${tab}"]`).forEach(el => { el.textContent = n || ""; el.classList.toggle("hide", !n); });
+}
 function openTab(name) {
   if (!document.getElementById("tab-" + name)) name = "overview";
   current = name;
-  document.querySelectorAll("nav.side button[data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
-  document.querySelectorAll("section[id^=tab-]").forEach(s => s.classList.toggle("hide", s.id !== "tab-" + name));
-  try { localStorage.setItem("uni-tab", name); } catch (e) {}
+  $$("[data-tab]").forEach(b => { if (b.dataset.tab === name) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+  $$("section[id^=tab-]").forEach(s => s.classList.toggle("hide", s.id !== "tab-" + name));
+  try { localStorage.setItem("uni-tab", name); } catch (e) { /* bỏ qua */ }
   window.scrollTo(0, 0);
   ({ overview: loadOverview, providers: loadProviders, combos: loadCombos, keys: loadKeys, settings: loadSettings,
      playground: refreshModelOptions })[name]?.();
@@ -484,256 +598,383 @@ function openTab(name) {
 window.openTab = openTab;
 
 // ---------------------------------------------------------------- overview
-document.querySelectorAll("#hoursSeg button").forEach(b => b.addEventListener("click", () => {
-  document.querySelectorAll("#hoursSeg button").forEach(x => x.classList.toggle("on", x === b));
-  $("#hours").value = b.dataset.h; loadOverview();
+$$("#hoursSeg button").forEach(b => b.addEventListener("click", () => {
+  $$("#hoursSeg button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); loadOverview();
 }));
+const hours = () => +($("#hoursSeg [aria-pressed=true]")?.dataset.h || 24);
+const allConns = () => providers.flatMap(p => p.connections.map(c => ({ ...c, p })));
 
-const kpi = (ic, label, value, sub, extra = "") => `<div class="kpi"><div class="l">${label}</div>
-  <div class="v">${value}</div>${sub ? `<div class="s">${sub}</div>` : ""}${extra}</div>`;
-const pill = (cls, text, title) => `<span class="pill ${cls}"${title ? ` title="${esc(title)}"` : ""}>${text}</span>`;
+function fixButtons(c) {
+  const p = c.p, b = [];
+  if (p.type === "gemini_web") b.push(`<button class="btn sm primary" onclick="geminiCookie('${p.id}','${c.id}')">Dán cookie mới</button>`);
+  if (p.type === "codex" && /token|refresh|đăng nhập|401|invalid_grant|reused|revoked/i.test(c.last_error || ""))
+    b.push(`<button class="btn sm primary" onclick="codexLogin('${p.id}')">Đăng nhập lại</button>`);
+  b.push(`<button class="btn sm" onclick="testConn('${c.id}')">Gọi thử</button>`);
+  if (c.health !== "ok") b.push(`<button class="btn sm ghost" onclick="resetConn('${c.id}')">Mở khóa</button>`);
+  return b.join("");
+}
 
-const loadOverview = run(async () => {
-  const d = await api("/admin/api/overview?hours=" + $("#hours").value);
-  $("#ver").textContent = "v" + d.version + " · ai gateway";
-  const c = d.counts, done1 = c.connections > 0, done2 = c.keys > 0;
-  const step = (ok, n, title, desc, btn) => `<div class="step ${ok ? "done" : ""}"><span class="n">${ok ? icon("check") : n}</span>
-    <div><b>${title}</b><p>${desc}</p>${btn}</div></div>`;
-  $("#warns").innerHTML = ((done1 && done2) ? "" : `<div class="card"><div class="card-h"><h2>Bắt đầu nhanh</h2>
-      <span class="muted" style="font-size:12px">${(done1 ? 1 : 0) + (done2 ? 1 : 0)}/2 bước bắt buộc</span></div><div class="steps">
-    ${step(done1, 1, "Thêm provider", "Dán API key (NVIDIA, Groq, OpenRouter…) hoặc đăng nhập ChatGPT.", `<button class="btn sm ${done1 ? "" : "primary"}" onclick="openTab('providers')">Mở Providers</button>`)}
-    ${step(done2, 2, "Tạo API key cho bot", "Key dạng sk-uni-… để bot hoặc Claude Code gọi vào UniRouter.", `<button class="btn sm ${!done1 || done2 ? "" : "primary"}" onclick="keyForm(null)">Tạo key</button>`)}
-    ${step(false, 3, "Gọi model auto", "Không cần combo: <span class=mono>auto</span> tự chọn provider và tự chuyển khi lỗi.", `<button class="btn sm" onclick="openTab('settings')">Xem cách kết nối</button>`)}
-  </div></div>`) + d.warnings.filter(w => !/Chưa có API key|Chưa kết nối provider/.test(w)).map(w => `<div class="alert">${icon("alert")}<div>${esc(w)}</div></div>`).join("");
+const loadOverview = loader("#board", async () => {
+  const [d, pv] = await Promise.all([api("/admin/api/overview?hours=" + hours()), api("/admin/api/providers")]);
+  providers = pv.data;
+  $("#ver").textContent = "Phiên bản " + d.version;
+  const active = providers.filter(p => p.connections.length);
+  const conns = allConns().filter(c => c.health !== "disabled");
+  const healthy = conns.filter(c => c.health === "ok").length;
+  const broken = conns.filter(c => c.health === "error" || c.health === "cooldown");
+  setCount("providers", broken.length);
+
+  // bước khởi đầu khi chưa có gì
+  const c0 = d.counts;
+  $("#ovStart").innerHTML = (c0.connections && c0.keys) ? "" : `<div class="alert info" style="margin-bottom:16px">${icon("info")}<div>
+    <b>Bắt đầu:</b> ${c0.connections ? "đã có nguồn AI." : `thêm một nguồn AI ở <a href="#" onclick="openTab('providers');return false">Nguồn AI</a> (dán API key, đăng nhập ChatGPT hoặc dán cookie Gemini).`}
+    ${c0.keys ? "" : ` Sau đó <a href="#" onclick="keyForm(null);return false">tạo API key</a> cho bot và gọi model <span class="mono">auto</span>.`}</div></div>`;
+
+  // bảng tín hiệu
+  const board = $("#board");
+  if (!active.length) {
+    board.innerHTML = empty(`Chưa có tài khoản nào. <a href="#" onclick="openTab('providers');return false">Thêm nguồn AI</a> để bắt đầu.`, "plug");
+  } else {
+    board.innerHTML = `<div class="board-top"><div class="board-sum"><b>${healthy}/${conns.length}</b> tài khoản đang khỏe</div>
+      <span class="muted" style="font-size:13px">${active.length} nguồn · cập nhật ${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</span></div>
+      <div class="siglines">${active.map(p => `<div class="sigline"><div class="line-name"><span title="${esc(p.name)}">${esc(p.name)}</span></div>
+        <div class="cells">${p.connections.map(c => `<button class="cell ${c.health}" title="${esc(c.label)}: ${HEALTH[c.health]}${c.health === "cooldown" ? " " + dur(c.blocked_for) : ""}" aria-label="${esc(c.label)}: ${HEALTH[c.health]}" onclick="gotoProvider('${p.id}')"></button>`).join("")}</div></div>`).join("")}</div>
+      <div class="board-legend"><span><i style="background:var(--ok)"></i>Khỏe</span><span><i style="background:var(--warn)"></i>Tạm khóa, tự mở lại</span><span><i style="background:var(--bad)"></i>Lỗi, cần xử lý</span><span><i style="border:1.5px dashed var(--off)"></i>Đã tắt</span></div>
+      ${broken.length ? `<div class="fix-list">${broken.map(c => `<div class="fix"><span class="lamp ${c.health}" style="margin-top:7px"></span>
+        <div class="grow"><div><b>${esc(c.label)}</b> <span class="muted">· ${esc(c.p.name)}${c.health === "cooldown" ? " · mở lại sau " + dur(c.blocked_for) : ""}</span></div>
+        <div>${esc(c.block_reason || c.last_error || "")}</div></div><div class="acct-acts">${fixButtons(c)}</div></div>`).join("")}</div>` : ""}`;
+  }
 
   const t = d.stats.total, okp = t.n ? Math.round(100 * (t.ok || 0) / t.n) : null;
-  $("#stats").innerHTML = [
-    kpi("bolt", "Request", compact(t.n), `${fmt(t.n - (t.ok || 0))} lỗi`),
-    kpi("check", "Tỷ lệ thành công", okp == null ? "–" : okp + "<small>%</small>", t.n ? `${fmt(t.ok)} / ${fmt(t.n)} request` : "chưa có request",
-      `<div class="meter"><i style="width:${okp || 0}%;background:${okp == null || okp >= 95 ? "var(--ok)" : okp >= 80 ? "var(--warn)" : "var(--bad)"}"></i></div>`),
-    kpi("coins", "Token", `${compact(t.inp)}<small>vào</small> <span class="muted" style="font-weight:400">/</span> ${compact(t.outp)}<small>ra</small>`, "prompt / completion"),
-    kpi("clock", "Độ trễ trung bình", t.lat ? fmt(Math.round(t.lat)) + `<small>ms</small>` : "–", "toàn bộ request")].join("");
-  const mini = (l, v) => `<div class="mini"><span>${l}</span><b>${v}</b></div>`;
-  $("#minis").innerHTML = mini("RTK tiết kiệm", t.rtk ? "~" + compact(Math.round(t.rtk / 4)) + " tok" : "–")
-    + mini("Tài khoản khỏe", `<span class="${c.connections && c.healthy < c.connections ? "warn" : ""}">${c.healthy}/${c.connections}</span>`)
-    + mini("Combo", fmt(c.combos)) + mini("API keys", fmt(c.keys));
+  const span = { 1: "1 giờ", 24: "24 giờ", 168: "7 ngày" }[hours()];
+  $("#figures").innerHTML = [
+    ["Request trong " + span, compact(t.n), t.n ? `${fmt(t.n - (t.ok || 0))} lỗi` : ""],
+    ["Thành công", okp == null ? "–" : okp + "<em>%</em>", ""],
+    ["Token vào / ra", `${compact(t.inp)}<em>/</em> ${compact(t.outp)}`, ""],
+    ["Độ trễ trung bình", t.lat ? fmt(Math.round(t.lat)) + "<em>ms</em>" : "–", ""]]
+    .map(([l, v, s]) => `<div class="fig"><small>${l}</small><b>${v}</b>${s ? `<small>${s}</small>` : ""}</div>`).join("");
 
-  // chart
-  const bms = d.stats.bucket_ms, nb = Math.min(168, Math.ceil(d.stats.hours * 3600000 / bms));
-  const endB = Math.floor(Date.now() / bms) * bms, byB = Object.fromEntries(d.stats.series.map(s => [s.b, s]));
-  const series = Array.from({ length: nb }, (_, i) => { const b = endB - (nb - 1 - i) * bms; return byB[b] || { b, n: 0, err: 0 }; });
-  const max = Math.max(1, ...series.map(s => s.n));
-  const tfmt = b => new Date(b).toLocaleString("vi-VN", bms >= 3600000 && d.stats.hours > 24
-    ? { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
-  if (!d.stats.series.length) {
-    $("#chart").innerHTML = `<div style="margin:auto">${empty("Chưa có request trong khoảng thời gian này")}</div>`;
-    $("#axis").innerHTML = "";
-  } else {
-    $("#chart").innerHTML = `<div class="gridline" style="top:0"><span>${fmt(max)}</span></div><div class="gridline" style="top:50%"><span>${fmt(Math.round(max / 2))}</span></div>` +
-      series.map((s, i) => { const err = s.err || 0, ok = Math.max(0, s.n - err);
-        return `<div class="col" data-i="${i}">${ok ? `<div class="seg-ok${err ? " under" : ""}" style="height:${100 * ok / max}%"></div>` : ""}${err ? `<div class="seg-err" style="height:${Math.max(2, 100 * err / max)}%"></div>` : ""}</div>`; }).join("");
-    $("#axis").innerHTML = `<span>${tfmt(series[0].b)}</span><span>${tfmt(series[Math.floor(nb / 2)].b)}</span><span>bây giờ</span>`;
-    const tip = $("#tip");
-    $("#chart").querySelectorAll(".col").forEach(el => {
-      el.onmousemove = e => { const s = series[+el.dataset.i], err = s.err || 0;
-        tip.innerHTML = `<b>${tfmt(s.b)}</b><br><i style="background:var(--s-ok)"></i>${fmt(s.n - err)} thành công<br><i style="background:var(--s-err)"></i>${fmt(err)} lỗi`;
-        tip.classList.remove("hide"); tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + "px"; tip.style.top = (e.clientY - 46) + "px"; };
-      el.onmouseleave = () => tip.classList.add("hide");
-    });
-  }
-  $("#chartInfo").textContent = `mỗi cột ${bms >= 3600000 ? "1 giờ" : "5 phút"}`;
+  $("#ovWarns").innerHTML = d.warnings.filter(w => !/Chưa có API key|Chưa kết nối provider/.test(w))
+    .map(w => `<div class="alert">${icon("alert")}<div>${esc(w)}</div></div>`).join("");
+
+  drawChart(d.stats);
 
   const bm = d.stats.by_model;
-  $("#byModel").innerHTML = bm.length ? `<thead><tr><th>Provider / model</th><th class="num">Request</th><th>Thành công</th><th class="num">Token vào / ra</th><th class="num">TTFB TB</th></tr></thead><tbody>` +
-    bm.map(r => { const p = Math.round(100 * r.ok / r.n);
-      return `<tr><td><span class="mono">${esc(r.provider)}/${esc(r.model)}</span></td><td class="num">${fmt(r.n)}</td>
-      <td><div class="row" style="gap:8px;flex-wrap:nowrap"><div class="meter" style="width:70px;margin:0"><i style="width:${p}%;background:${p >= 95 ? "var(--ok)" : p >= 80 ? "var(--warn)" : "var(--bad)"}"></i></div><span style="font-variant-numeric:tabular-nums">${p}%</span></div></td>
-      <td class="num">${compact(r.inp)} / ${compact(r.outp)}</td><td class="num">${r.ttfb ? fmt(Math.round(r.ttfb)) + " ms" : "–"}</td></tr>`; }).join("") + "</tbody>"
-    : `<tbody><tr><td>${empty("Chưa có dữ liệu")}</td></tr></tbody>`;
+  $("#byModel").innerHTML = bm.length ? `<thead><tr><th scope="col">Đích</th><th class="num" scope="col">Request</th><th scope="col">Thành công</th><th class="num" scope="col">Token vào / ra</th><th class="num" scope="col">Chờ byte đầu</th></tr></thead><tbody>` +
+    bm.map(r => { const p = Math.round(100 * r.ok / r.n), col = p >= 95 ? "var(--ok)" : p >= 80 ? "var(--warn)" : "var(--bad)";
+      return `<tr><td class="mono">${esc(r.provider)}/${esc(r.model)}</td><td class="num">${fmt(r.n)}</td>
+        <td style="white-space:nowrap"><span class="bar"><i style="width:${p}%;background:${col}"></i></span>${p}%</td>
+        <td class="num">${compact(r.inp)} / ${compact(r.outp)}</td><td class="num">${r.ttfb ? fmt(Math.round(r.ttfb)) + " ms" : "–"}</td></tr>`; }).join("") + "</tbody>"
+    : `<tbody><tr><td>${empty("Chưa có request trong khoảng thời gian này.")}</td></tr></tbody>`;
+
   const rc = d.stats.recent;
-  $("#recent").innerHTML = rc.length ? `<thead><tr><th>Thời điểm</th><th>Key</th><th>Model gọi</th><th>Đích thực tế</th><th>Kết quả</th><th class="num">Thời gian</th><th class="num">Token</th></tr></thead><tbody>` +
-    rc.map(r => `<tr><td class="muted" style="white-space:nowrap">${ago(r.ts)}</td><td>${esc(r.key_name)}<div class="muted" style="font-size:11.5px">${esc(r.endpoint)}</div></td>
+  $("#recent").innerHTML = rc.length ? `<thead><tr><th scope="col">Lúc</th><th scope="col">Key</th><th scope="col">Model gọi</th><th scope="col">Đích thực tế</th><th scope="col">Kết quả</th><th class="num" scope="col">Thời gian</th><th class="num" scope="col">Token</th></tr></thead><tbody>` +
+    rc.map(r => `<tr><td class="muted" style="white-space:nowrap">${ago(r.ts)}</td><td>${esc(r.key_name)}<div class="muted" style="font-size:12px">${esc(r.endpoint)}</div></td>
       <td class="mono">${esc(r.requested_model)}</td>
-      <td class="mono">${r.provider ? esc(r.provider + "/" + r.model) : "–"}${r.attempts > 1 ? ` <span class="badge" title="số lượt thử">×${r.attempts}</span>` : ""}</td>
-      <td>${pill(r.status < 400 ? "ok" : r.status === 429 ? "cooldown" : "error", r.status, r.error)}</td>
-      <td class="num">${r.latency_ms != null ? fmt(r.latency_ms) + " ms" : "–"}</td><td class="num">${compact(r.input_tokens)} / ${compact(r.output_tokens)}</td></tr>`).join("") + "</tbody>"
-    : `<tbody><tr><td>${empty("Chưa có request nào. Thử gửi ở tab Thử nghiệm.")}</td></tr></tbody>`;
+      <td class="mono">${r.provider ? esc(r.provider + "/" + r.model) : "–"}${r.attempts > 1 ? ` <span class="tag line" title="Số lần thử">${r.attempts} lần</span>` : ""}</td>
+      <td>${tag(r.status < 400 ? "ok" : r.status === 429 ? "cooldown" : "error", r.status, r.error)}</td>
+      <td class="num">${r.latency_ms != null ? fmt(r.latency_ms) + " ms" : "–"}</td><td class="num" style="white-space:nowrap">${compact(r.input_tokens)} / ${compact(r.output_tokens)}</td></tr>`).join("") + "</tbody>"
+    : `<tbody><tr><td>${empty(`Chưa có request nào. Gửi thử ở <a href="#" onclick="openTab('playground');return false">Thử nghiệm</a>.`)}</td></tr></tbody>`;
 });
+
+function drawChart(st) {
+  const bms = st.bucket_ms, nb = Math.min(168, Math.ceil(st.hours * 3600000 / bms));
+  const endB = Math.floor(Date.now() / bms) * bms, byB = Object.fromEntries(st.series.map(s => [s.b, s]));
+  const series = Array.from({ length: nb }, (_, i) => { const b = endB - (nb - 1 - i) * bms; return byB[b] || { b, n: 0, err: 0 }; });
+  const max = Math.max(1, ...series.map(s => s.n));
+  const tf = b => new Date(b).toLocaleString("vi-VN", st.hours > 24 ? { day: "2-digit", month: "2-digit", hour: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+  $("#chartInfo").textContent = `mỗi cột ${bms >= 3600000 ? "1 giờ" : "5 phút"}`;
+  if (!st.series.length) { $("#chart").innerHTML = `<div style="margin:auto">${empty("Chưa có request")}</div>`; $("#axis").innerHTML = ""; return; }
+  $("#chart").innerHTML = `<div class="gl" style="top:0"><span>${fmt(max)}</span></div><div class="gl" style="top:50%"><span>${fmt(Math.round(max / 2))}</span></div>` +
+    series.map((s, i) => { const err = s.err || 0, ok = Math.max(0, s.n - err);
+      return `<div class="col" data-i="${i}">${ok ? `<div class="ok" style="height:${100 * ok / max}%"></div>` : ""}${err ? `<div class="err" style="height:${Math.max(3, 100 * err / max)}%"></div>` : ""}</div>`; }).join("");
+  $("#axis").innerHTML = `<span>${tf(series[0].b)}</span><span>${tf(series[Math.floor(nb / 2)].b)}</span><span>bây giờ</span>`;
+  const tip = $("#tip");
+  $$("#chart .col").forEach(el => {
+    el.onmousemove = e => { const s = series[+el.dataset.i], err = s.err || 0;
+      tip.innerHTML = `<b>${tf(s.b)}</b><br>${fmt(s.n - err)} thành công · ${fmt(err)} lỗi`;
+      tip.classList.remove("hide"); tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + "px"; tip.style.top = (e.clientY - 48) + "px"; };
+    el.onmouseleave = () => tip.classList.add("hide");
+  });
+}
+window.gotoProvider = pid => { openTab("providers"); setTimeout(() => document.getElementById("prov-" + pid)?.scrollIntoView({ block: "start", behavior: "smooth" }), 250); };
 
 // ---------------------------------------------------------------- providers
-const loadProviders = run(async () => {
-  providers = (await api("/admin/api/providers")).data;
-  refreshModelOptions();
-  const active = providers.filter(p => p.connections.length), rest = providers.filter(p => !p.connections.length);
-  $("#providerList").innerHTML =
-    `<div class="section-title" style="margin-top:0"><h2>Đang dùng<em>${active.length}</em></h2></div>` +
-    (active.length ? `<div class="card">${active.map(providerBlock).join("")}</div>`
-      : `<div class="card">${empty("Chưa có provider nào được kết nối. Chọn một provider bên dưới để bắt đầu.", "plug")}</div>`) +
-    (rest.length ? `<div class="section-title"><h2>Thêm nhanh<em>${rest.length}</em></h2><span class="muted" style="font-size:12px">Bấm "Lấy key" để đăng ký, rồi dán key vào</span></div>
-      <div class="tiles">${rest.map(providerTile).join("")}</div>` : "");
-});
+const TYPE_LBL = { codex: "Đăng nhập ChatGPT", gemini_web: "Cookie", openai: "API key" };
+const provIcon = p => `<div class="prov-ic ${p.connections.length ? "on" : ""}">${esc(initials(p.name))}</div>`;
+const typeTags = p => tag("line", TYPE_LBL[p.type] || "API key") + (p.free ? tag("ok", "Miễn phí") : "");
 
 function provStatus(p) {
-  if (!p.enabled) return pill("disabled", "Đang tắt");
-  const n = p.connections.filter(c => c.health === "ok").length;
-  if (n === p.connections.length) return pill("ok", n > 1 ? `${n} key khỏe` : "Hoạt động");
-  if (n) return pill("cooldown", `${n}/${p.connections.length} khỏe`);
-  return p.connections.some(c => c.health === "cooldown") ? pill("cooldown", "Tạm khóa") : pill("error", "Lỗi");
+  if (!p.enabled) return tag("", "Đang tắt");
+  const live = p.connections.filter(c => c.enabled), ok = live.filter(c => c.health === "ok").length;
+  if (!live.length) return tag("", "Không có tài khoản bật");
+  if (ok === live.length) return tag("ok", live.length > 1 ? `${ok} tài khoản khỏe` : "Hoạt động");
+  if (ok) return tag("cooldown", `${ok}/${live.length} khỏe`);
+  return live.some(c => c.health === "cooldown") ? tag("cooldown", "Tạm khóa") : tag("error", "Lỗi");
 }
-const avatar = p => `<div class="pav ${p.connections && p.connections.length ? "on" : ""}">${esc(initials(p.name))}</div>`;
-const typeBadge = p => `<span class="badge">${p.type === "codex" ? "OAuth" : "API key"}</span>${p.free ? `<span class="badge free">Miễn phí</span>` : ""}`;
-function addButtons(p, primary = true) {
-  return p.type === "codex"
-    ? `<button class="btn sm ${primary ? "primary" : ""}" onclick="codexLogin('${p.id}')">Đăng nhập ChatGPT</button><button class="btn sm" onclick="codexImport('${p.id}')">Nhập auth.json</button>`
-    : `<button class="btn sm ${primary ? "primary" : ""}" onclick="addKey('${p.id}')">${icon("plus")}Thêm key</button>`;
-}
-function modelTools(p) {
-  const hasConn = p.connections.some(c => c.enabled);
-  return `<span class="chip more" title="Thêm model bằng tay (khi app không tự lấy được)" onclick="addModelBox('${p.id}', this)">+ model</span>` +
-    (hasConn ? `<span class="chip more" title="Lấy danh sách model từ chính provider (ưu tiên model miễn phí)" onclick="syncModels('${p.id}')">↻ lấy model</span>` : "");
-}
-function modelChips(p, limit = 8) {
-  if (!p.models.length) return `<span class="muted" style="font-size:12.5px;line-height:22px">Chưa có model${p.connections.length ? "" : ", sẽ tự lấy khi thêm key"}</span>` + modelTools(p);
-  const auto = p.kinds?.chat;
-  let list = p.models.slice(0, limit);
-  if (auto && !list.includes(auto) && p.models.includes(auto)) list = [auto, ...p.models.filter(m => m !== auto).slice(0, limit - 1)];
-  const shown = list.map(m => {
-    const tip = [m === auto ? "Model dùng khi gọi \"auto\"" : "", p.latency[m] ? "TTFB ~" + p.latency[m] + " ms" : "", "Bấm để chọn"].filter(Boolean).join(" · ");
-    return `<span class="chip pick ${m === auto ? "auto" : ""}" title="${esc(tip)}" data-m="${esc(m)}" onclick="modelMenu('${p.id}', this.dataset.m)">${esc(m)}</span>`;
-  }).join("");
-  return shown + (p.models.length > limit ? `<span class="chip more" onclick="editProvider('${p.id}')">+${p.models.length - limit} model</span>` : "") + modelTools(p);
+function addButtons(p, primary) {
+  const cls = primary ? "btn sm primary" : "btn sm";
+  if (p.type === "codex") return `<button class="${cls}" onclick="codexLogin('${p.id}')">${icon("plus")}Đăng nhập ChatGPT</button>`;
+  if (p.type === "gemini_web") return `<button class="${cls}" onclick="geminiCookie('${p.id}')">${icon("plus")}Dán cookie</button>`;
+  return `<button class="${cls}" onclick="addKey('${p.id}')">${icon("plus")}Thêm key</button>`;
 }
 
-// Lấy bản mới nhất của provider trước khi ghi danh sách model (router có thể vừa tự bỏ model, hoặc tab khác vừa sửa)
+function acctMeta(p, c) {
+  const bits = [];
+  if (c.meta?.email) bits.push(esc(c.meta.email) + (c.meta.plan ? ` (${esc(c.meta.plan)})` : ""));
+  if (c.key_hint) bits.push(`key <span class="mono">${esc(c.key_hint)}</span>`);
+  if (c.cookie_fp) bits.push(`cookie <span class="mono">${esc(c.cookie_fp)}</span>` + (c.rotated_at ? `, xoay ${ago(c.rotated_at)}` : ", chưa xoay"));
+  if (c.expires_at && p.type === "codex") bits.push(c.has_refresh ? "tự làm mới token" : `token hết hạn ${when(c.expires_at)}`);
+  bits.push(c.last_used_at ? "dùng " + ago(c.last_used_at) : "chưa dùng");
+  return bits.join(" · ");
+}
+function acctRow(p, c) {
+  const lbl = c.health === "cooldown" ? `Tạm khóa ${dur(c.blocked_for)}` : HEALTH[c.health];
+  const msg = c.block_reason || c.last_error;
+  const scopes = (c.meta?.missing_scopes || []).length
+    ? `<div class="acct-warn">Token thiếu quyền ${esc(c.meta.missing_scopes.join(", "))}. Nếu gọi bị lỗi, đăng nhập lại bằng cách “Dán callback”.</div>` : "";
+  return `<div class="acct"><span class="lamp ${c.health}"></span>
+    <div class="grow"><div class="row" style="gap:8px"><b>${esc(c.label)}</b>${tag(c.health, lbl)}</div>
+      <div class="acct-meta">${acctMeta(p, c)}</div>${msg ? `<div class="acct-err">${esc(msg)}</div>` : ""}${scopes}</div>
+    <div class="acct-acts">
+      <button class="btn sm" onclick="testConn('${c.id}')">Gọi thử</button>
+      ${p.type === "codex" ? `<button class="btn sm" onclick="quota('${c.id}')">Hạn mức</button>` : ""}
+      ${p.type === "gemini_web" ? `<button class="btn sm" onclick="geminiCookie('${p.id}','${c.id}')">Dán cookie mới</button>` : ""}
+      ${c.health === "cooldown" || c.health === "error" ? `<button class="btn sm" onclick="resetConn('${c.id}')">Mở khóa</button>` : ""}
+      <button class="btn sm ghost" onclick="toggleConn('${c.id}', ${!c.enabled})">${c.enabled ? "Tắt" : "Bật"}</button>
+      <button class="btn sm ghost danger" onclick="delConn('${c.id}')">Xóa</button></div></div>`;
+}
+function modelChips(p, limit = 10) {
+  const auto = p.kinds?.chat, hasConn = p.connections.some(c => c.enabled);
+  const tools = `<button class="chip add" onclick="addModelBox('${p.id}', this)">+ model</button>` +
+    (hasConn && p.type !== "gemini_web" ? `<button class="chip add" title="Lấy danh sách model từ chính nguồn, ưu tiên model miễn phí" onclick="syncModels('${p.id}')">Lấy model</button>` : "");
+  if (!p.models.length) return `<span class="muted" style="font-size:12.5px;line-height:26px">Chưa có model${p.connections.length ? "" : ", sẽ tự lấy khi thêm key"}</span>` + tools;
+  let list = p.models.slice(0, limit);
+  if (auto && !list.includes(auto) && p.models.includes(auto)) list = [auto, ...p.models.filter(m => m !== auto).slice(0, limit - 1)];
+  return list.map(m => {
+    const tip = [m === auto ? "Model dùng khi gọi auto" : "", p.latency[m] ? "chờ byte đầu ~" + p.latency[m] + " ms" : ""].filter(Boolean).join(", ");
+    return `<button class="chip ${m === auto ? "auto" : ""}" title="${esc(tip || "Bấm để chọn thao tác")}" data-m="${esc(m)}" onclick="modelMenu('${p.id}', this.dataset.m)">${esc(m)}</button>`;
+  }).join("") + (p.models.length > limit ? `<button class="chip add" onclick="editProvider('${p.id}')">+${p.models.length - limit} model khác</button>` : "")
+    + (p.kinds?.embeddings ? `<span class="chip dashed" title="Model embedding">embedding: ${esc(p.kinds.embeddings)}</span>` : "")
+    + (p.kinds?.images ? `<span class="chip dashed" title="Model tạo ảnh">ảnh: ${esc(p.kinds.images)}</span>` : "") + tools;
+}
+function providerBlock(p) {
+  return `<div class="prov" id="prov-${esc(p.id)}"><div class="prov-h">${provIcon(p)}
+    <div class="prov-t"><div class="row"><h3>${esc(p.name)}</h3>${provStatus(p)}<span class="tag line mono" title="Gọi model bằng ${esc(p.alias)}/tên-model">${esc(p.alias)}/</span>${typeTags(p)}</div>
+      ${p.note ? `<div class="prov-note">${esc(p.note)}</div>` : ""}</div>
+    <div class="row">${addButtons(p, false)}<button class="btn sm ghost" onclick="editProvider('${p.id}')">Sửa</button>
+      <button class="btn sm ghost" onclick="toggleProvider('${p.id}', ${!p.enabled})">${p.enabled ? "Tắt nguồn" : "Bật nguồn"}</button></div></div>
+    <div class="prov-models"><div class="chips">${modelChips(p)}</div></div>
+    <div class="accts">${p.connections.map(c => acctRow(p, c)).join("")}</div></div>`;
+}
+function catalogItem(p) {
+  return `<div class="cat">${provIcon(p)}<div class="grow"><div class="row" style="gap:6px"><h3>${esc(p.name)}</h3>${typeTags(p)}</div>
+    <p>${esc(p.note || (p.models.length ? p.models.slice(0, 3).join(", ") : "Tương thích OpenAI"))}</p>
+    <div class="row">${addButtons(p, true)}${p.signup_url ? `<a class="btn sm ghost" href="${esc(p.signup_url)}" target="_blank" rel="noopener">${p.type === "openai" ? "Lấy key" : "Mở trang"}${icon("ext")}</a>` : ""}
+      <button class="btn sm ghost" onclick="editProvider('${p.id}')">Sửa</button></div></div></div>`;
+}
+const matches = (p, q) => !q || [p.name, p.alias, p.id, ...p.models].some(s => String(s).toLowerCase().includes(q));
+function renderProviders() {
+  const q = $("#provSearch").value.trim().toLowerCase();
+  const active = providers.filter(p => p.connections.length && matches(p, q)), rest = providers.filter(p => !p.connections.length && matches(p, q));
+  $("#provActive").innerHTML = active.length ? `<div class="panel">${active.map(providerBlock).join("")}</div>`
+    : `<div class="panel">${empty(q ? "Không có nguồn đang dùng khớp với từ khóa." : "Chưa kết nối nguồn nào. Chọn một nguồn bên dưới để bắt đầu.", "plug")}</div>`;
+  $("#catHead").classList.toggle("hide", !rest.length);
+  $("#provCatalog").parentNode.classList.toggle("hide", !rest.length);
+  $("#provCatalog").innerHTML = rest.map(catalogItem).join("");
+}
+const loadProviders = loader("#provActive", async () => {
+  providers = (await api("/admin/api/providers")).data;
+  setCount("providers", allConns().filter(c => c.health === "error" || c.health === "cooldown").length);
+  renderProviders(); refreshModelOptions();
+});
+$("#provSearch").addEventListener("input", () => renderProviders());
+const reload = () => current === "overview" ? loadOverview() : loadProviders();
+
 async function freshProvider(pid) {
   providers = (await api("/admin/api/providers")).data;
   const p = providers.find(x => x.id === pid);
-  if (!p) throw new Error("Provider không còn tồn tại");
+  if (!p) throw new Error("Nguồn này không còn tồn tại");
   return p;
 }
 const splitModels = text => [...new Set(text.split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean))];
 
+// ---------------------------------------------------------------- account actions
+const testMsg = r => r.ok ? toast(`Gọi thử thành công sau ${fmt(r.ms)} ms (${r.model}): ${r.reply}`) : toast(`Gọi thử lỗi${r.status ? " " + r.status : ""}: ${r.error}`, true);
+window.testConn = run(async id => { toast("Đang gọi thử…"); testMsg(await api(`/admin/api/connections/${id}/test`, { body: {} })); reload(); });
+window.resetConn = run(async id => { await api(`/admin/api/connections/${id}/reset`, { body: {} }); toast("Đã mở khóa tài khoản"); reload(); });
+window.toggleConn = run(async (id, en) => { await api(`/admin/api/connections/${id}`, { method: "PATCH", body: { enabled: en } }); toast(en ? "Đã bật tài khoản" : "Đã tắt tài khoản"); reload(); });
+window.delConn = run(async id => { if (!confirm("Xóa tài khoản này khỏi UniRouter?")) return; await api(`/admin/api/connections/${id}`, { method: "DELETE" }); toast("Đã xóa tài khoản"); reload(); });
+window.toggleProvider = run(async (id, en) => { await api("/admin/api/providers", { body: { id, enabled: en } }); toast(en ? "Đã bật nguồn" : "Đã tắt nguồn"); loadProviders(); });
+window.quota = run(async id => {
+  const d = await api(`/admin/api/connections/${id}/quota`), rows = [];
+  const walk = (o, path) => { if (o && typeof o === "object") { for (const [k, v] of Object.entries(o)) walk(v, path ? path + "." + k : k); }
+    else if (/percent|reset|limit|plan|remaining|used/i.test(path)) rows.push([path, o]); };
+  walk(d, "");
+  modal(`${mHead("Hạn mức ChatGPT", "Số liệu OpenAI trả về cho tài khoản này.")}
+    ${rows.length ? `<div class="panel tbl-wrap"><table><tbody>${rows.map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td class="num">${esc(/reset.*_at$/.test(k) && v > 1e9 ? when(v * 1000) : v)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Không có số liệu hạn mức.</p>`}
+    <details style="margin-top:12px"><summary>Dữ liệu gốc</summary><div class="code" style="margin-top:8px">${esc(JSON.stringify(d, null, 2))}</div></details>
+    <div class="foot" style="margin-top:16px"><button class="btn" onclick="closeModal()">Đóng</button></div>`);
+});
+
+window.addKey = pid => {
+  const p = providers.find(x => x.id === pid);
+  modal(`${mHead(`Thêm key ${esc(p.name)}`, p.signup_url ? `Chưa có key? <a href="${esc(p.signup_url)}" target="_blank" rel="noopener">Lấy key${p.free ? " miễn phí" : ""} tại đây</a>.` : "")}
+    ${p.note ? `<div class="alert info" style="margin-bottom:14px">${icon("info")}<div>${esc(p.note)}</div></div>` : ""}
+    <label class="f"><span>API key</span><textarea id="mkKey" placeholder="sk-..." autocomplete="off" spellcheck="false"></textarea><div class="hint">Mỗi dòng một key. Thêm nhiều key để tự xoay vòng khi một key hết hạn mức.</div></label>
+    <label class="f"><span>Tên gợi nhớ</span><input type="text" id="mkLabel" value="${esc(p.name)}"></label>
+    <div class="foot"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="mkSave">Lưu và gọi thử</button></div>`, m => {
+    const b = m.querySelector("#mkSave");
+    b.onclick = run(() => busy(b, "Đang kiểm tra…", async () => {
+      const r = await api(`/admin/api/providers/${pid}/connections`, { body: { label: $("#mkLabel").value, api_key: $("#mkKey").value } });
+      closeModal();
+      const extra = r.added_models ? `, thêm ${r.added_models} model` : "";
+      if (r.test && r.test.ok) toast(`Đã thêm ${r.added} key${extra}. Gọi thử thành công sau ${fmt(r.test.ms)} ms.`);
+      else if (r.test) toast(`Đã thêm key${extra}, nhưng gọi thử lỗi: ${r.test.error}`, true);
+      else toast(`Đã thêm ${r.added} key${r.error ? ". Chưa lấy được model: " + r.error : ""}`, !!r.error);
+      loadProviders();
+    }));
+  });
+};
+
+// ---------------------------------------------------------------- ChatGPT login (3 cách)
+window.codexLogin = (pid, method = "device") => {
+  modal(`${mHead("Đăng nhập ChatGPT", "Dùng gói ChatGPT của bạn qua UniRouter. Token được mã hóa và tự làm mới, thường không phải đăng nhập lại.")}
+    <div class="mtabs" role="tablist">
+      <button role="tab" data-m="device">Mã thiết bị</button><button role="tab" data-m="pkce">Dán callback</button><button role="tab" data-m="import">auth.json</button>
+    </div><div id="cxBody"></div>`, m => {
+    const show = run(async which => {
+      if (window._poll) { clearTimeout(window._poll); window._poll = null; }
+      m.querySelectorAll(".mtabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.m === which)));
+      const body = m.querySelector("#cxBody");
+      if (which === "device") {
+        body.innerHTML = `<p class="muted">Đang tạo mã…</p>`;
+        const d = await api("/admin/api/codex/device/start", { body: { provider_id: pid } });
+        body.innerHTML = `<ol class="steps"><li>Mở <a href="${esc(d.verification_url)}" target="_blank" rel="noopener">${esc(d.verification_url)}</a> và đăng nhập ChatGPT.</li><li>Nhập mã này:</li></ol>
+          <div class="big-code">${esc(d.user_code)}</div>
+          <div class="foot"><span class="muted left" id="cxStatus">Đang chờ bạn xác nhận…</span>
+            <button class="btn" onclick="copyText('${esc(d.user_code)}','Đã copy mã')">${icon("copy")}Copy mã</button><button class="btn" onclick="closeModal()">Đóng</button></div>
+          <p class="hint">Nếu trang báo lỗi hoặc máy chủ bị chặn, dùng cách “Dán callback”.</p>`;
+        const poll = async () => {
+          try {
+            const r = await api("/admin/api/codex/device/poll", { body: { login_id: d.login_id } });
+            if (r.status === "completed") { closeModal(); toast("Đã thêm tài khoản ChatGPT"); reload(); return; }
+            if (r.status !== "pending") { const s = $("#cxStatus"); if (s) s.textContent = "Phiên đăng nhập: " + r.status; return; }
+          } catch (e) { const s = $("#cxStatus"); if (s) { s.textContent = e.message; s.className = "bad left"; } return; }
+          window._poll = setTimeout(poll, (d.interval || 5) * 1000);
+        };
+        window._poll = setTimeout(poll, (d.interval || 5) * 1000);
+      } else if (which === "pkce") {
+        body.innerHTML = `<p class="muted">Đang tạo link…</p>`;
+        const d = await api("/admin/api/codex/pkce/start", { body: { provider_id: pid } });
+        body.innerHTML = `<ol class="steps">
+            <li><a href="${esc(d.authorize_url)}" target="_blank" rel="noopener">Mở trang đăng nhập ChatGPT</a> và đăng nhập.</li>
+            <li>Trình duyệt sẽ chuyển tới <span class="mono">localhost:1455</span> và báo không mở được trang. Đó là bình thường.</li>
+            <li>Copy toàn bộ địa chỉ trên thanh địa chỉ và dán vào ô dưới.</li></ol>
+          <label class="f"><span>Link callback</span><textarea id="cxCb" style="min-height:70px" placeholder="http://localhost:1455/auth/callback?code=…&state=…" spellcheck="false"></textarea><div class="hint">Link có hiệu lực 15 phút.</div></label>
+          <div class="foot"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="cxDone">Hoàn tất đăng nhập</button></div>`;
+        const b = body.querySelector("#cxDone");
+        b.onclick = run(() => busy(b, "Đang xác nhận…", async () => {
+          await api("/admin/api/codex/pkce/complete", { body: { login_id: d.login_id, callback_url: $("#cxCb").value } });
+          closeModal(); toast("Đã thêm tài khoản ChatGPT"); reload();
+        }));
+      } else {
+        body.innerHTML = `<p class="soft" style="margin-bottom:12px">Chạy <span class="mono">codex login</span> trên máy của bạn, rồi dán nội dung file <span class="mono">~/.codex/auth.json</span> (hoặc chỉ refresh token).</p>
+          <div class="alert" style="margin-bottom:14px">${icon("alert")}<div>Sau khi nhập, đừng dùng tiếp tài khoản đó trong Codex CLI trên máy: hai nơi cùng làm mới token sẽ làm OpenAI thu hồi phiên.</div></div>
+          <label class="f"><span>auth.json hoặc refresh token</span><textarea id="ciText" style="min-height:110px" spellcheck="false"></textarea></label>
+          <label class="f"><span>Tên gợi nhớ (tùy chọn)</span><input type="text" id="ciLabel"></label>
+          <div class="foot"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="ciSave">Nhập tài khoản</button></div>`;
+        const b = body.querySelector("#ciSave");
+        b.onclick = run(() => busy(b, "Đang nhập…", async () => {
+          await api("/admin/api/codex/import", { body: { provider_id: pid, label: $("#ciLabel").value, text: $("#ciText").value } });
+          closeModal(); toast("Đã nhập tài khoản ChatGPT"); reload();
+        }));
+      }
+    });
+    m.querySelectorAll(".mtabs button").forEach(b => b.onclick = () => show(b.dataset.m));
+    show(method);
+  });
+};
+
+// ---------------------------------------------------------------- Gemini Web cookie
+window.geminiCookie = (pid, cid) => {
+  const p = providers.find(x => x.id === pid), c = cid ? p?.connections.find(x => x.id === cid) : null;
+  modal(`${mHead(c ? `Dán cookie mới cho ${esc(c.label)}` : "Thêm tài khoản Gemini", "Gemini web không có token dài hạn. UniRouter dùng cookie đăng nhập và tự xoay cookie khoảng 10 phút một lần để giữ phiên.")}
+    <ol class="steps">
+      <li>Mở <a href="https://gemini.google.com" target="_blank" rel="noopener">gemini.google.com</a> trong cửa sổ ẩn danh hoặc một hồ sơ trình duyệt riêng, rồi đăng nhập. Nên dùng tài khoản phụ.</li>
+      <li>Xuất cookie của trang bằng extension xuất cookie (JSON hoặc Netscape), hoặc chép từ DevTools. Cần tối thiểu <span class="mono">__Secure-1PSID</span> và <span class="mono">__Secure-1PSIDTS</span>.</li>
+      <li>Dán vào ô dưới, sau đó đóng cửa sổ đó. Đừng bấm Đăng xuất: đăng xuất làm cookie chết ngay.</li></ol>
+    <label class="f"><span>Cookie</span><textarea id="gwCookie" style="min-height:110px" placeholder="__Secure-1PSID=…; __Secure-1PSIDTS=…; SID=…" spellcheck="false" autocomplete="off"></textarea><div class="hint">Nhận dạng một dòng, JSON hoặc file cookies.txt. Cookie được mã hóa trong cơ sở dữ liệu.</div></label>
+    <label class="f"><span>Tên gợi nhớ</span><input type="text" id="gwLabel" value="${esc(c ? c.label : "")}" placeholder="vd: Gemini phụ 1"></label>
+    <div id="gwResult"></div>
+    <div class="foot"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="gwSave">Lưu và kiểm tra</button></div>`, m => {
+    const b = m.querySelector("#gwSave");
+    b.onclick = run(() => busy(b, "Đang kiểm tra phiên…", async () => {
+      const r = await api("/admin/api/gemini-web/cookie", { body: { provider_id: pid, connection_id: cid || null, cookie: $("#gwCookie").value, label: $("#gwLabel").value } });
+      if (r.ok) { closeModal(); toast("Cookie hợp lệ, đã lưu tài khoản Gemini"); reload(); return; }
+      $("#gwResult").innerHTML = `<div class="alert bad" style="margin-bottom:14px">${icon("alert")}<div><b>Đã lưu nhưng Google từ chối phiên.</b> ${esc(r.error)}
+        <div class="hint">Đăng nhập lại trong cửa sổ mới rồi xuất cookie lần nữa. Nếu lỗi lặp lại trên máy chủ, IP máy chủ có thể đang bị Google bắt xác minh: đặt biến GEMINI_WEB_PROXY.</div></div></div>`;
+      loadProviders();
+    }));
+  });
+};
+
+// ---------------------------------------------------------------- models
 window.addModelBox = (pid, el) => {
   const inp = document.createElement("input");
-  inp.className = "chip-in"; inp.placeholder = "tên model, Enter để thêm"; inp.autocomplete = "off"; inp.spellcheck = false;
+  inp.className = "chip-in"; inp.type = "text"; inp.placeholder = "tên model, Enter để thêm"; inp.autocomplete = "off"; inp.spellcheck = false;
   el.replaceWith(inp); inp.focus();
   let done = false;
-  const cancel = () => { if (done) return; done = true; inp.replaceWith(el); };  // trả lại chip, không vẽ lại cả trang
+  const cancel = () => { if (done) return; done = true; inp.replaceWith(el); };
   inp.onkeydown = run(async e => {
     if (e.key === "Escape") return cancel();
     if (e.key !== "Enter" || done) return;
-    const names = splitModels(inp.value);
-    if (!names.length) return cancel();
+    const names = splitModels(inp.value); if (!names.length) return cancel();
     done = true; inp.disabled = true;
     try {
-      const p = await freshProvider(pid);
-      const add = names.filter(m => !p.models.includes(m));
+      const p = await freshProvider(pid), add = names.filter(m => !p.models.includes(m));
       if (!add.length) { toast("Model đã có trong danh sách"); inp.replaceWith(el); return; }
       await api("/admin/api/providers", { body: { id: pid, models: [...p.models, ...add] } });
       toast(`Đã thêm ${add.join(", ")}`);
-    } catch (e) { done = false; inp.disabled = false; inp.focus(); throw e; }
+    } catch (err) { done = false; inp.disabled = false; inp.focus(); throw err; }
     loadProviders();
   });
   inp.onblur = () => setTimeout(() => { if (!done && !inp.value.trim()) cancel(); }, 150);
 };
-
-window.addModelDialog = pid => {
-  const p = providers.find(x => x.id === pid);
-  modal(`${mHead(`Thêm model cho ${esc(p.name)}`, "Dùng khi app không tự lấy được danh sách model. Mỗi dòng hoặc mỗi dấu phẩy một model.")}
-    <label class="f"><span>Tên model</span><textarea id="amModels" style="min-height:70px" placeholder="vd: ${esc(p.models[0] || "gpt-4o-mini")}"></textarea></label>
-    ${p.models.length ? `<div class="hint" style="margin-top:-8px">Đang có: ${esc(p.models.slice(0, 6).join(", "))}${p.models.length > 6 ? ` và ${p.models.length - 6} model khác` : ""}</div>` : ""}
-    <div class="row end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="amSave">Thêm</button></div>`, m => {
-    m.querySelector("#amSave").onclick = run(async () => {
-      const cur = await freshProvider(pid);
-      const add = splitModels($("#amModels").value.replace(/ /g, "\n")).filter(x => !cur.models.includes(x));
-      if (!add.length) { toast("Chưa có model mới"); return; }
-      await api("/admin/api/providers", { body: { id: pid, models: [...cur.models, ...add] } });
-      closeModal(); toast(`Đã thêm ${add.join(", ")}`); loadProviders();
-    });
-  });
-};
-
 window.syncModels = run(async (pid, mode = "free") => {
   const p = providers.find(x => x.id === pid);
   toast("Đang lấy danh sách model…");
   const r = await api(`/admin/api/providers/${pid}/sync-models`, { body: { mode } });
-  const added = r.added.length ? `Đã thêm ${r.added.length} model${r.free_only ? " miễn phí" : ""} vào ${p.name} (${r.models} model).` : "";
+  const added = r.added.length ? `Đã thêm ${r.added.length} model${r.free_only ? " miễn phí" : ""} vào ${p.name}.` : "";
   if (r.free_only && r.paid_left) {
     loadProviders();
-    if (confirm(`${added ? added + "\n\n" : ""}${p.name} còn ${r.paid_left} model trả phí chưa thêm. Thêm nốt?`)) return syncModels(pid, "all");
-    if (added) toast(added);
-    return;
+    if (confirm(`${added ? added + "\n\n" : ""}${p.name} còn ${r.paid_left} model trả phí chưa thêm. Thêm luôn?`)) return syncModels(pid, "all");
+    if (added) toast(added); return;
   }
-  toast(added || r.note || `Không có model mới (provider trả ${r.fetched} model, đã có đủ)`);
+  toast(added || r.note || `Không có model mới (nguồn trả về ${r.fetched} model, đã có đủ)`);
   loadProviders();
 });
-
-function providerBlock(p) {
-  const conns = p.connections.map(c => {
-    const who = c.meta?.email ? `${esc(c.meta.email)}${c.meta.plan ? ` · ${esc(c.meta.plan)}` : ""}` : (c.key_hint ? `key ${esc(c.key_hint)}` : "");
-    const exp = c.expires_at ? ` · token hết hạn ${new Date(c.expires_at).toLocaleString("vi-VN")}` : "";
-    const label = c.health === "cooldown" ? "Tạm khóa " + dur(c.blocked_for) : HEALTH[c.health];
-    const msg = c.block_reason || c.last_error;
-    return `<div class="conn"><span class="dot ${c.health}" title="${label}"></span>
-      <div class="info"><div class="row" style="gap:8px"><b>${esc(c.label)}</b>${pill(c.health, label)}</div>
-        <div class="meta">${[who, "dùng " + ago(c.last_used_at)].filter(Boolean).join(" · ")}${exp}</div>
-        ${msg ? `<div class="err">${esc(msg)}</div>` : ""}</div>
-      <div class="row acts">
-        <button class="btn sm" onclick="testConn('${c.id}')">Test</button>
-        ${p.type === "codex" ? `<button class="btn sm" onclick="quota('${c.id}')">Hạn mức</button>` : ""}
-        ${c.health === "cooldown" || c.health === "error" ? `<button class="btn sm" onclick="resetConn('${c.id}')">Mở khóa</button>` : ""}
-        <button class="btn sm ghost" onclick="toggleConn('${c.id}', ${!c.enabled})">${c.enabled ? "Tắt" : "Bật"}</button>
-        <button class="btn sm ghost danger" onclick="delConn('${c.id}')">Xóa</button></div></div>`;
-  }).join("");
-  return `<div class="prov"><div class="prov-h">${avatar(p)}
-    <div class="prov-t"><div class="row"><h3>${esc(p.name)}</h3>${provStatus(p)}<span class="badge mono" title="Gọi bằng ${esc(p.alias)}/<model>">${esc(p.alias)}/</span>${typeBadge(p)}</div>
-      ${p.note ? `<div class="prov-note">${esc(p.note)}</div>` : ""}</div>
-    <div class="row acts">${addButtons(p, false)}<button class="btn sm" onclick="editProvider('${p.id}')">Sửa</button>
-      <button class="btn sm ghost" onclick="toggleProvider('${p.id}', ${!p.enabled})">${p.enabled ? "Tắt" : "Bật"}</button></div></div>
-    <div class="chips" style="margin:12px 0 0 50px">${modelChips(p)}${p.kinds?.embeddings ? `<span class="chip" title="Model embedding" style="border-style:dashed">embed · ${esc(p.kinds.embeddings)}</span>` : ""}${p.kinds?.images ? `<span class="chip" title="Model tạo ảnh" style="border-style:dashed">ảnh · ${esc(p.kinds.images)}</span>` : ""}</div>
-    <div class="conns" style="margin-left:50px">${conns}</div></div>`;
-}
-
-function providerTile(p) {
-  return `<div class="tile"><div class="row" style="gap:10px;flex-wrap:nowrap">${avatar(p)}<div style="min-width:0"><h3>${esc(p.name)}</h3>
-      <div class="row" style="gap:6px;margin-top:3px">${typeBadge(p)}</div></div></div>
-    <div class="prov-note">${esc(p.note || (p.models.length ? p.models.slice(0, 3).join(", ") : "Tương thích OpenAI"))}</div>
-    <div class="row">${addButtons(p)}${p.signup_url ? `<a class="btn sm ghost" href="${esc(p.signup_url)}" target="_blank" rel="noopener">Lấy key${icon("ext")}</a>` : ""}
-      <button class="btn sm ghost" style="margin-left:auto" title="Thêm model bằng tay" onclick="addModelDialog('${p.id}')">+ model</button>
-      <button class="btn sm ghost" onclick="editProvider('${p.id}')">Sửa</button></div></div>`;
-}
-
 window.modelMenu = (pid, m) => {
-  const p = providers.find(x => x.id === pid);
-  if (!p) return;
-  const isAuto = p.kinds?.chat === m;
-  const conn = p.connections.find(c => c.enabled && c.health !== "disabled");
-  modal(`${mHead(`<span class="mono" style="font-size:15px">${esc(p.alias)}/${esc(m)}</span>`, isAuto ? `Đang là model ${esc(p.name)} dùng khi gọi "auto".` : `Chọn thao tác với model này của ${esc(p.name)}.`)}
-    <div class="mchoice">
-      <button class="btn ${isAuto ? "" : "primary"}" id="mmAuto" ${isAuto ? "disabled" : ""}>${icon("check")}Dùng cho "auto"</button>
-      <button class="btn" id="mmTest" ${conn ? "" : "disabled title=\"Chưa có tài khoản/API key\""}>Gọi thử</button>
-      <button class="btn" id="mmCopy">Copy tên model</button>
-      <button class="btn danger" id="mmDrop">Bỏ khỏi danh sách</button>
-    </div>
-    <div class="row end"><button class="btn ghost" onclick="closeModal()">Đóng</button></div>`, d => {
+  const p = providers.find(x => x.id === pid); if (!p) return;
+  const isAuto = p.kinds?.chat === m, conn = p.connections.find(c => c.enabled);
+  modal(`${mHead(`<span class="mono" style="font-size:15px">${esc(p.alias)}/${esc(m)}</span>`, isAuto ? `Đây là model của ${esc(p.name)} được dùng khi client gọi “auto”.` : `Model của ${esc(p.name)}.`)}
+    <div class="row" style="margin-bottom:8px">
+      <button class="btn ${isAuto ? "" : "primary"}" id="mmAuto" ${isAuto ? "disabled" : ""}>${icon("check")}Dùng cho auto</button>
+      <button class="btn" id="mmTest" ${conn ? "" : "disabled title=\"Chưa có tài khoản đang bật\""}>Gọi thử</button>
+      <button class="btn" id="mmCopy">${icon("copy")}Copy tên</button>
+      <button class="btn danger" id="mmDrop">Bỏ model</button></div>
+    <div class="foot"><button class="btn ghost" onclick="closeModal()">Đóng</button></div>`, d => {
     d.querySelector("#mmAuto").onclick = run(async () => {
       const cur = await freshProvider(pid);
       await api("/admin/api/providers", { body: { id: pid, options: { ...(cur.options || {}), auto_model: m } } });
-      closeModal(); toast(`"auto" sẽ dùng ${p.alias}/${m}`); loadProviders();
+      closeModal(); toast(`Khi gọi auto, ${p.name} sẽ dùng ${m}`); loadProviders();
     });
-    d.querySelector("#mmTest").onclick = run(async () => {
-      const b = d.querySelector("#mmTest"); b.disabled = true; b.textContent = "Đang gọi thử…";
-      try {
-        const r = await api(`/admin/api/connections/${conn.id}/test`, { body: { model: m } });
-        r.ok ? toast(`OK ${r.ms} ms (${r.model}): ${r.reply}`) : toast(`Lỗi ${r.status || ""}: ${r.error}`, true);
-      } finally { b.disabled = false; b.textContent = "Gọi thử"; }
-      loadProviders();
-    });
+    const tb = d.querySelector("#mmTest");
+    tb.onclick = run(() => busy(tb, "Đang gọi…", async () => { testMsg(await api(`/admin/api/connections/${conn.id}/test`, { body: { model: m } })); }));
     d.querySelector("#mmCopy").onclick = () => copyText(`${p.alias}/${m}`);
     d.querySelector("#mmDrop").onclick = run(async () => {
-      if (!confirm(`Bỏ model ${m} khỏi ${p.name}? Có thể thêm lại bằng "+ model".`)) return;
-      const cur = await freshProvider(pid);
-      const opts = { ...(cur.options || {}) };
+      if (!confirm(`Bỏ ${m} khỏi ${p.name}? Có thể thêm lại bằng “+ model”.`)) return;
+      const cur = await freshProvider(pid), opts = { ...(cur.options || {}) };
       for (const k of ["auto_model", "image_chat_model"]) if (opts[k] === m) delete opts[k];
       await api("/admin/api/providers", { body: { id: pid, models: cur.models.filter(x => x !== m), options: opts } });
       closeModal(); toast(`Đã bỏ ${m}`); loadProviders();
@@ -741,156 +982,72 @@ window.modelMenu = (pid, m) => {
   });
 };
 
-window.testConn = run(async id => {
-  toast("Đang gọi thử…");
-  const r = await api(`/admin/api/connections/${id}/test`, { body: {} });
-  r.ok ? toast(`OK ${r.ms} ms (${r.model}): ${r.reply}`) : toast(`Lỗi ${r.status || ""}: ${r.error}`, true);
-  loadProviders();
-});
-window.resetConn = run(async id => { await api(`/admin/api/connections/${id}/reset`, { body: {} }); toast("Đã mở khóa"); loadProviders(); });
-window.toggleConn = run(async (id, en) => { await api(`/admin/api/connections/${id}`, { method: "PATCH", body: { enabled: en } }); loadProviders(); });
-window.delConn = run(async id => { if (!confirm("Xóa tài khoản/key này?")) return; await api(`/admin/api/connections/${id}`, { method: "DELETE" }); loadProviders(); });
-window.toggleProvider = run(async (id, en) => { await api("/admin/api/providers", { body: { id, enabled: en } }); loadProviders(); });
-window.quota = run(async id => {
-  const d = await api(`/admin/api/connections/${id}/quota`);
-  const rows = [];
-  const walk = (o, path) => { if (o && typeof o === "object") { for (const [k, v] of Object.entries(o)) walk(v, path ? path + "." + k : k); }
-    else if (/percent|reset|limit|plan|remaining|used/i.test(path)) rows.push([path, o]); };
-  walk(d, "");
-  modal(`${mHead("Hạn mức ChatGPT")}${rows.length ? `<div class="card" style="box-shadow:none"><table><tbody>${rows.map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td class="num">${esc(/reset.*_at$/.test(k) && v > 1e9 ? new Date(v * 1000).toLocaleString("vi-VN") : v)}</td></tr>`).join("")}</tbody></table></div>` : ""}
-    <details><summary>Dữ liệu gốc</summary><div class="code">${esc(JSON.stringify(d, null, 2))}</div></details>
-    <div class="row end"><button class="btn" onclick="closeModal()">Đóng</button></div>`);
-});
-
-window.addKey = pid => {
-  const p = providers.find(x => x.id === pid);
-  modal(`<div class="row" style="gap:12px;margin-bottom:14px;flex-wrap:nowrap">${avatar(p)}<div><h2 style="margin:0">Thêm key ${esc(p.name)}</h2>
-      ${p.signup_url ? `<a href="${esc(p.signup_url)}" target="_blank" rel="noopener" style="font-size:13px">Chưa có key? Lấy key${p.free ? " miễn phí" : ""} tại đây ↗</a>` : ""}</div></div>
-    ${p.note ? `<div class="alert info">${esc(p.note)}</div>` : ""}
-    <label class="f"><span>API key</span><textarea id="mkKey" placeholder="sk-..." autocomplete="off"></textarea><div class="hint">Mỗi dòng một key. Thêm nhiều key để tự xoay vòng khi hết hạn mức.</div></label>
-    <label class="f"><span>Tên gợi nhớ</span><input type="text" id="mkLabel" value="${esc(p.name)}"></label>
-    <div class="row end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="mkSave">Lưu và gọi thử</button></div>`,
-    m => { const b = m.querySelector("#mkSave"); m.querySelector("#mkKey").focus();
-      b.onclick = run(async () => {
-        b.disabled = true; b.textContent = "Đang kiểm tra…";
-        try {
-          const r = await api(`/admin/api/providers/${pid}/connections`, { body: { label: $("#mkLabel").value, api_key: $("#mkKey").value } });
-          closeModal();
-          const extra = r.added_models ? `, bổ sung ${r.added_models} model` : "";
-          if (r.test && r.test.ok) toast(`Đã thêm ${r.added} key${extra}, gọi thử thành công (${r.test.ms} ms)`);
-          else if (r.test) toast(`Đã thêm key${extra} nhưng gọi thử lỗi: ${r.test.error}`, true);
-          else toast(`Đã thêm ${r.added} key${r.error ? ", chưa lấy được model: " + r.error : ""}`, !!r.error);
-          loadProviders();
-        } finally { b.disabled = false; b.textContent = "Lưu và gọi thử"; }
-      }); });
-};
-
-window.codexLogin = run(async pid => {
-  const d = await api("/admin/api/codex/device/start", { body: { provider_id: pid } });
-  modal(`${mHead("Đăng nhập ChatGPT", "Dùng gói ChatGPT Plus/Pro của bạn qua UniRouter.")}
-    <ol style="padding-left:18px;margin:0 0 4px"><li>Mở <a href="${esc(d.verification_url)}" target="_blank" rel="noopener">${esc(d.verification_url)}</a> và đăng nhập.</li>
-    <li>Nhập mã sau:</li></ol><div class="big-code">${esc(d.user_code)}</div>
-    <div class="row end"><span class="muted" id="cxStatus" style="margin-right:auto">Đang chờ xác nhận…</span>
-      <button class="btn" onclick="copyText('${esc(d.user_code)}','Đã copy mã')">${icon("copy")}Copy mã</button>
-      <button class="btn" onclick="closeModal()">Đóng</button></div>`);
-  const poll = async () => {
-    try {
-      const r = await api("/admin/api/codex/device/poll", { body: { login_id: d.login_id } });
-      if (r.status === "completed") { closeModal(); toast("Đã thêm tài khoản ChatGPT"); loadProviders(); return; }
-      if (r.status !== "pending") { $("#cxStatus").textContent = "Phiên đăng nhập: " + r.status; return; }
-    } catch (e) { const s = $("#cxStatus"); if (s) s.textContent = e.message; return; }
-    window._poll = setTimeout(poll, (d.interval || 5) * 1000);
-  };
-  window._poll = setTimeout(poll, (d.interval || 5) * 1000);
-});
-
-window.codexImport = pid => modal(`${mHead("Nhập tài khoản ChatGPT", "Dán nội dung <span class=mono>~/.codex/auth.json</span> (sau khi chạy <span class=mono>codex login</span> trên máy bạn) hoặc refresh token. Dùng khi đăng nhập thiết bị bị chặn trên máy chủ.")}
-  <label class="f"><span>auth.json hoặc refresh token</span><textarea id="ciText" style="min-height:120px"></textarea></label>
-  <label class="f"><span>Tên gợi nhớ (tùy chọn)</span><input type="text" id="ciLabel"></label>
-  <div class="row end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="ciSave">Nhập</button></div>`,
-  m => m.querySelector("#ciSave").onclick = run(async () => {
-    await api("/admin/api/codex/import", { body: { provider_id: pid, label: $("#ciLabel").value, text: $("#ciText").value } });
-    closeModal(); toast("Đã nhập tài khoản"); loadProviders();
-  }));
-
+// ---------------------------------------------------------------- provider forms
 function providerForm(p) {
-  modal(`<div class="row" style="gap:12px;margin-bottom:16px;flex-wrap:nowrap">${avatar(p)}<h2 style="margin:0">Sửa ${esc(p.name)}</h2></div>
-    <label class="f"><span>Tên hiển thị</span><input type="text" id="pfName" value="${esc(p.name)}"></label>
-    <label class="f"><span>Base URL</span><input type="text" id="pfUrl" value="${esc(p.base_url)}">${p.type === "codex" ? "" : `<div class="hint">Phần đứng trước /chat/completions</div>`}</label>
-    <label class="f"><span>Model (mỗi dòng 1 model)</span><textarea id="pfModels" style="min-height:110px">${esc(p.models.join("\n"))}</textarea></label>
-    <div class="row" style="margin:-6px 0 12px"><button class="btn sm" id="pfFetch">Lấy danh sách model từ provider</button></div>
-    <div id="pfFetched" class="chips" style="margin-bottom:12px;max-height:150px;overflow:auto"></div>
-    <details><summary>Nâng cao</summary>
-    <label class="f"><span>Model dùng khi gọi "auto"</span><select id="pfAuto">${p.models.map(m => `<option ${((p.options || {}).auto_model || p.models[0]) === m ? "selected" : ""}>${esc(m)}</option>`).join("")}</select></label>
-    <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px">
-      ${p.type === "openai" ? `<label class="f"><span>Model embedding</span><input type="text" id="pfEmb" value="${esc((p.options || {}).embedding_model ?? "")}" placeholder="${esc(p.kinds?.embeddings || "tự nhận diện")}"></label>` : "<span></span>"}
-      <label class="f"><span>Model tạo ảnh${p.type === "codex" ? " (thử nghiệm)" : ""}</span><input type="text" id="pfImg" value="${esc((p.options || {}).image_model ?? "")}" placeholder="${esc(p.kinds?.images || "tự nhận diện")}"></label>
+  const o = p.options || {};
+  modal(`${mHead(`Sửa ${esc(p.name)}`)}
+    <div class="form-grid">
+      <label class="f"><span>Tên hiển thị</span><input type="text" id="pfName" value="${esc(p.name)}"></label>
+      ${p.type === "openai" ? `<label class="f"><span>Tiền tố model</span><input type="text" id="pfAlias" value="${esc(p.alias)}"><div class="hint">Client gọi ${esc(p.alias)}/${esc(p.models[0] || "model")}</div></label>` : "<span></span>"}
     </div>
-    <div class="hint" style="margin:-8px 0 14px">Dùng khi gọi <span class="mono">/v1/embeddings</span> và <span class="mono">/v1/images/generations</span> với model "auto". Để trống thì app tự nhận diện từ danh sách model.</div>
-    ${p.type === "openai" ? `<label class="f"><span>Tiền tố model</span><input type="text" id="pfAlias" value="${esc(p.alias)}"><div class="hint">Client gọi bằng tiền_tố/model, vd ${esc(p.alias)}/${esc(p.models[0] || "model")}</div></label>
-    <label class="f"><span>Khi có nhiều API key</span><select id="pfStrategy">
-      <option value="round_robin" ${(p.options || {}).account_strategy !== "fill_first" ? "selected" : ""}>Xoay vòng đều giữa các key</option>
-      <option value="fill_first" ${(p.options || {}).account_strategy === "fill_first" ? "selected" : ""}>Dùng hết key đầu rồi mới sang key sau</option>
-    </select></label>` : ""}
-    </details>
-    <div class="row end">${!p.builtin ? `<button class="btn danger" id="pfDel" style="margin-right:auto">Xóa provider</button>` : ""}
-      <button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="pfSave">Lưu</button></div>`, m => {
+    ${p.type === "openai" ? `<label class="f"><span>Base URL</span><input type="text" id="pfUrl" value="${esc(p.base_url)}"><div class="hint">Phần đứng trước /chat/completions</div></label>` : ""}
+    <label class="f"><span>Model (mỗi dòng một model)</span><textarea id="pfModels" style="min-height:110px">${esc(p.models.join("\n"))}</textarea></label>
+    ${p.type === "openai" || p.type === "codex" ? `<div class="row" style="margin:-6px 0 10px"><button class="btn sm" id="pfFetch">${icon("refresh")}Lấy danh sách từ nguồn</button></div><div id="pfFetched" class="chips" style="margin-bottom:12px;max-height:150px;overflow:auto"></div>` : ""}
+    <details style="margin-bottom:14px"><summary>Nâng cao</summary><div style="margin-top:12px">
+      <label class="f"><span>Model dùng khi gọi auto</span><select id="pfAuto">${p.models.map(m => `<option ${(o.auto_model || p.models[0]) === m ? "selected" : ""}>${esc(m)}</option>`).join("")}</select></label>
+      ${p.type === "gemini_web" ? `<label class="switch"><input type="checkbox" id="pfTemp" ${o.temporary_chats !== false ? "checked" : ""}><span>Chat tạm<small>Không lưu hội thoại vào lịch sử tài khoản Google.</small></span></label>` : ""}
+      ${p.type !== "gemini_web" ? `<div class="form-grid">
+        ${p.type === "openai" ? `<label class="f"><span>Model embedding</span><input type="text" id="pfEmb" value="${esc(o.embedding_model ?? "")}" placeholder="${esc(p.kinds?.embeddings || "tự nhận diện")}"></label>` : "<span></span>"}
+        <label class="f"><span>Model tạo ảnh</span><input type="text" id="pfImg" value="${esc(o.image_model ?? "")}" placeholder="${esc(p.kinds?.images || "tự nhận diện")}"></label></div>` : ""}
+      ${p.type === "openai" ? `<label class="f"><span>Khi có nhiều key</span><select id="pfStrategy">
+        <option value="round_robin" ${o.account_strategy !== "fill_first" ? "selected" : ""}>Xoay vòng đều giữa các key</option>
+        <option value="fill_first" ${o.account_strategy === "fill_first" ? "selected" : ""}>Dùng hết key đầu rồi mới sang key sau</option></select></label>` : ""}
+    </div></details>
+    <div class="foot">${!p.builtin ? `<button class="btn danger left" id="pfDel">Xóa nguồn</button>` : ""}<button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="pfSave">Lưu thay đổi</button></div>`, m => {
     m.querySelector("#pfSave").onclick = run(async () => {
-      const body = { id: p.id, name: $("#pfName").value, base_url: $("#pfUrl").value, models: $("#pfModels").value };
+      const body = { id: p.id, name: $("#pfName").value, models: $("#pfModels").value }, opts = { ...o };
       if ($("#pfAlias")) body.alias = $("#pfAlias").value;
-      const opts = { ...(p.options || {}) };
+      if ($("#pfUrl")) body.base_url = $("#pfUrl").value;
       if ($("#pfStrategy")) opts.account_strategy = $("#pfStrategy").value;
-      if ($("#pfAuto") && $("#pfAuto").value) opts.auto_model = $("#pfAuto").value;
+      if ($("#pfAuto")?.value) opts.auto_model = $("#pfAuto").value;
+      if ($("#pfTemp")) opts.temporary_chats = $("#pfTemp").checked;
       for (const [id, k] of [["#pfEmb", "embedding_model"], ["#pfImg", "image_model"]]) {
-        const el = $(id); if (!el) continue;
-        if (el.value.trim()) opts[k] = el.value.trim(); else delete opts[k];
+        const el = $(id); if (!el) continue; if (el.value.trim()) opts[k] = el.value.trim(); else delete opts[k];
       }
       body.options = opts;
-      await api("/admin/api/providers", { body });
-      closeModal(); toast("Đã lưu"); loadProviders();
+      await api("/admin/api/providers", { body }); closeModal(); toast("Đã lưu thay đổi"); loadProviders();
     });
     const f = m.querySelector("#pfFetch");
-    f.onclick = run(async () => {
-      f.disabled = true; f.textContent = "Đang lấy…";
-      try {
-        const r = await api(`/admin/api/providers/${p.id}/fetch-models`, { body: {} });
-        $("#pfFetched").innerHTML = r.models.map(x => `<span class="chip" style="cursor:pointer" title="Bấm để thêm">${esc(x)}</span>`).join("") || `<span class="muted">Không có model</span>`;
-        $("#pfFetched").querySelectorAll(".chip").forEach(ch => ch.onclick = () => {
-          const ta = $("#pfModels"); const list = ta.value.split("\n").map(s => s.trim()).filter(Boolean);
-          if (!list.includes(ch.textContent)) { list.push(ch.textContent); ta.value = list.join("\n"); } ch.style.opacity = .4; });
-        f.textContent = `${r.models.length} model, bấm để thêm`;
-      } finally { f.disabled = false; }
-    });
-    const d = m.querySelector("#pfDel");
-    if (d) d.onclick = run(async () => { if (!confirm("Xóa provider và toàn bộ key của nó?")) return;
-      await api(`/admin/api/providers/${p.id}`, { method: "DELETE" }); closeModal(); loadProviders(); });
+    if (f) f.onclick = run(() => busy(f, "Đang lấy…", async () => {
+      const r = await api(`/admin/api/providers/${p.id}/fetch-models`, { body: {} });
+      $("#pfFetched").innerHTML = r.models.map(x => `<button class="chip" title="Bấm để thêm">${esc(x)}</button>`).join("") || `<span class="muted">Không có model</span>`;
+      $$("#pfFetched .chip").forEach(ch => ch.onclick = () => {
+        const ta = $("#pfModels"), list = ta.value.split("\n").map(s => s.trim()).filter(Boolean);
+        if (!list.includes(ch.textContent)) { list.push(ch.textContent); ta.value = list.join("\n"); } ch.style.opacity = .4; });
+      toast(`Có ${r.models.length} model, bấm vào model để thêm`);
+    }));
+    const del = m.querySelector("#pfDel");
+    if (del) del.onclick = run(async () => { if (!confirm("Xóa nguồn này và toàn bộ tài khoản của nó?")) return;
+      await api(`/admin/api/providers/${p.id}`, { method: "DELETE" }); closeModal(); toast("Đã xóa nguồn"); loadProviders(); });
   });
 }
 window.editProvider = id => providerForm(providers.find(p => p.id === id));
-
-function quickProviderForm() {
-  modal(`${mHead("Provider tùy chỉnh", "Dùng cho mọi API tương thích OpenAI. Header và tham số được cấu hình tự động.")}
-    <label class="f"><span>Tên</span><input type="text" id="qpName" placeholder="vd: My API"></label>
-    <label class="f"><span>Base URL</span><input type="text" id="qpUrl" placeholder="https://api.example.com/v1"></label>
-    <label class="f"><span>API key</span><input type="password" id="qpKey" autocomplete="off" placeholder="sk-..."></label>
-    <label class="f"><span>Model (tùy chọn)</span><textarea id="qpModels" style="min-height:60px" placeholder="Để trống để tự lấy danh sách"></textarea></label>
-    <div class="row end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="qpSave">Thêm</button></div>`, m => {
-    const save = m.querySelector("#qpSave");
-    save.onclick = run(async () => {
-      save.disabled = true; save.textContent = "Đang thêm…";
-      try {
-        const r = await api("/admin/api/providers/quick", { body: { name: $("#qpName").value, base_url: $("#qpUrl").value,
-          models: $("#qpModels").value, api_key: $("#qpKey").value } });
-        closeModal();
-        if (!r.models.length) toast(`Đã thêm nhưng chưa có model${r.error ? " (" + r.error + ")" : ""}: bấm Sửa để nhập`, true);
-        else if (r.test && !r.test.ok) toast(`Đã thêm nhưng gọi thử lỗi: ${r.test.error}`, true);
-        else toast(`OK! ${r.models.length} model, gọi bằng ${r.alias}/<model> hoặc "auto"`);
-        loadProviders();
-      } finally { save.disabled = false; save.textContent = "Thêm"; }
-    });
-  });
-}
-$("#addProvider").onclick = () => quickProviderForm();
+$("#addCustom").onclick = () => modal(`${mHead("Nguồn tùy chỉnh", "Dùng cho mọi API tương thích OpenAI. Để trống ô model thì UniRouter tự lấy danh sách.")}
+  <label class="f"><span>Tên</span><input type="text" id="qpName" placeholder="vd: API của tôi"></label>
+  <label class="f"><span>Base URL</span><input type="text" id="qpUrl" placeholder="https://api.example.com/v1"></label>
+  <label class="f"><span>API key</span><input type="password" id="qpKey" autocomplete="off" placeholder="sk-..."></label>
+  <label class="f"><span>Model (tùy chọn)</span><textarea id="qpModels" style="min-height:60px"></textarea></label>
+  <div class="foot"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="qpSave">Thêm nguồn</button></div>`, m => {
+  const b = m.querySelector("#qpSave");
+  b.onclick = run(() => busy(b, "Đang thêm…", async () => {
+    const r = await api("/admin/api/providers/quick", { body: { name: $("#qpName").value, base_url: $("#qpUrl").value, models: $("#qpModels").value, api_key: $("#qpKey").value } });
+    closeModal();
+    if (!r.models.length) toast(`Đã thêm nguồn nhưng chưa có model${r.error ? " (" + r.error + ")" : ""}. Bấm Sửa để nhập model.`, true);
+    else if (r.test && !r.test.ok) toast(`Đã thêm nguồn nhưng gọi thử lỗi: ${r.test.error}`, true);
+    else toast(`Đã thêm nguồn với ${r.models.length} model. Gọi bằng ${r.alias}/tên-model hoặc auto.`);
+    loadProviders();
+  }));
+});
 
 async function refreshModelOptions() {
   try {
@@ -902,176 +1059,154 @@ async function refreshModelOptions() {
 }
 
 // ---------------------------------------------------------------- combos
-const STRAT = { priority: "Ưu tiên (lần lượt khi lỗi)", round_robin: "Xoay vòng", least_latency: "Nhanh nhất", random: "Ngẫu nhiên" };
-const loadCombos = run(async () => {
+const STRAT = { priority: "Lần lượt khi lỗi", round_robin: "Xoay vòng", least_latency: "Nhanh nhất", random: "Ngẫu nhiên" };
+const loadCombos = loader("#comboList", async () => {
   combos = (await api("/admin/api/combos")).data;
   refreshModelOptions();
-  $("#comboList").innerHTML = combos.length ? `<div class="card">${combos.map((c, i) => `<div class="combo"><div class="row between">
-      <div class="row"><h3 class="mono" style="font-size:14px">${esc(c.name)}</h3><span class="badge accent">${STRAT[c.strategy]}</span>${c.enabled ? "" : pill("disabled", "Đang tắt")}</div>
+  $("#comboList").innerHTML = combos.length ? `<div class="panel">${combos.map((c, i) => `<div class="prov"><div class="panel-b">
+    <div class="row between"><div class="row"><h3 class="mono" style="font-size:14.5px">${esc(c.name)}</h3>${tag("accent", STRAT[c.strategy])}${c.enabled ? "" : tag("", "Đang tắt")}</div>
       <div class="row"><button class="btn sm" onclick="editCombo(${i})">Sửa</button><button class="btn sm ghost danger" onclick="delCombo(${i})">Xóa</button></div></div>
-      ${c.note ? `<div class="prov-note">${esc(c.note)}</div>` : ""}
-      <div class="flow">${c.resolved.map((r, j) => `${j ? `<span class="arrow">${c.strategy === "priority" ? "→" : "·"}</span>` : ""}<span class="chip" ${r.ok ? `title="${esc(r.targets.join(", "))}"` : `style="color:var(--bad);border-color:var(--bad)" title="${esc(r.error)}"`}>${esc(r.spec)}${r.ok && (r.targets.length > 1 || r.targets[0] !== r.spec) ? ` <span class="muted">(${r.targets.length})</span>` : ""}</span>`).join("")}</div>
-    </div>`).join("")}</div>`
-    : `<div class="card">${empty(`Chưa có combo. Ví dụ: tạo combo <span class="mono">gpt-4o</span> trỏ tới <span class="mono">cx/gpt-5.6-sol</span> rồi <span class="mono">nim/…</span> để bot cũ gọi "gpt-4o" vẫn chạy.`, "route")}</div>`;
+    ${c.note ? `<div class="prov-note">${esc(c.note)}</div>` : ""}
+    <div class="flow">${c.resolved.map((r, j) => `${j ? `<span class="arrow">${c.strategy === "priority" ? "→" : "·"}</span>` : ""}<span class="chip dashed ${r.ok ? "" : "badref"}" title="${esc(r.ok ? r.targets.join(", ") : r.error)}">${esc(r.spec)}${r.ok && (r.targets.length > 1 || r.targets[0] !== r.spec) ? `&nbsp;<span class="muted">(${r.targets.length})</span>` : ""}</span>`).join("")}</div>
+  </div></div>`).join("")}</div>`
+    : `<div class="panel">${empty(`Chưa có combo. Ví dụ: combo tên <span class="mono">gpt-4o</span> trỏ tới <span class="mono">cx/gpt-5.6-sol</span> rồi <span class="mono">gmw/gemini-flash</span>, để bot cũ gọi “gpt-4o” vẫn chạy.`, "route")}</div>`;
 });
 function comboForm(c) {
   const isNew = !c;
   c = c || { name: "", strategy: "priority", targets: [], enabled: true, note: "" };
-  modal(`${mHead(isNew ? "Tạo combo" : "Sửa combo", "Client gọi tên combo như một model bình thường.")}
-    <label class="f"><span>Tên</span><input type="text" id="cbName" value="${esc(c.name)}" placeholder="vd: gpt-4o, smart, fast"></label>
-    <label class="f"><span>Chiến lược</span><select id="cbStrat">${Object.entries(STRAT).map(([k, v]) => `<option value="${k}" ${k === c.strategy ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-    <label class="f"><span>Model đích (mỗi dòng 1, dạng tiền_tố/model hoặc tên combo khác)</span><textarea id="cbTargets" style="min-height:120px">${esc(c.targets.join("\n"))}</textarea></label>
+  modal(`${mHead(isNew ? "Tạo combo" : "Sửa combo", "Đích ở trên được thử trước. Đích có thể là tiền_tố/model hoặc tên combo khác.")}
+    <div class="form-grid">
+      <label class="f"><span>Tên combo</span><input type="text" id="cbName" value="${esc(c.name)}" placeholder="vd: gpt-4o, nhanh, thông-minh"></label>
+      <label class="f"><span>Cách chọn đích</span><select id="cbStrat">${Object.entries(STRAT).map(([k, v]) => `<option value="${k}" ${k === c.strategy ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    </div>
+    <label class="f"><span>Đích (mỗi dòng một đích)</span><textarea id="cbTargets" style="min-height:110px">${esc(c.targets.join("\n"))}</textarea></label>
     <div class="row" style="margin:-6px 0 14px;flex-wrap:nowrap"><input type="text" id="cbPick" list="modelOptions" placeholder="Chọn model để thêm…"><button class="btn" id="cbAdd">${icon("plus")}Thêm</button></div>
     <label class="f"><span>Ghi chú</span><input type="text" id="cbNote" value="${esc(c.note)}"></label>
-    <label class="switch"><input type="checkbox" id="cbEn" ${c.enabled ? "checked" : ""}> Bật combo</label>
-    <div class="row end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="cbSave">Lưu</button></div>`, m => {
+    <label class="switch"><input type="checkbox" id="cbEn" ${c.enabled ? "checked" : ""}><span>Bật combo</span></label>
+    <div class="foot"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="cbSave">${isNew ? "Tạo combo" : "Lưu thay đổi"}</button></div>`, m => {
     m.querySelector("#cbAdd").onclick = () => { const v = $("#cbPick").value.trim(); if (!v) return;
       const ta = $("#cbTargets"); ta.value = (ta.value.trim() ? ta.value.trim() + "\n" : "") + v; $("#cbPick").value = ""; };
     m.querySelector("#cbSave").onclick = run(async () => {
       await api("/admin/api/combos", { body: { old_name: isNew ? null : c.name, name: $("#cbName").value, strategy: $("#cbStrat").value,
         targets: $("#cbTargets").value, note: $("#cbNote").value, enabled: $("#cbEn").checked } });
-      closeModal(); toast("Đã lưu combo"); loadCombos();
+      closeModal(); toast(isNew ? "Đã tạo combo" : "Đã lưu combo"); loadCombos();
     });
   });
 }
 $("#addCombo").onclick = () => comboForm(null);
 window.editCombo = i => comboForm(combos[i]);
 window.delCombo = run(async i => { const name = combos[i].name; if (!confirm(`Xóa combo ${name}?`)) return;
-  await api(`/admin/api/combos/${encodeURIComponent(name)}`, { method: "DELETE" }); loadCombos(); });
+  await api(`/admin/api/combos/${encodeURIComponent(name)}`, { method: "DELETE" }); toast("Đã xóa combo"); loadCombos(); });
 
 // ---------------------------------------------------------------- keys
-let keys = [];
-const loadKeys = run(async () => {
+const loadKeys = loader("#keyWrap", async () => {
+  if (!$("#keyTable")) $("#keyWrap").innerHTML = '<table id="keyTable"></table>';
   keys = (await api("/admin/api/keys")).data;
-  $("#keyTable").innerHTML = keys.length ? `<thead><tr><th>Tên</th><th>Key</th><th>Model được dùng</th><th>Giới hạn</th><th class="num">24 giờ qua</th><th>Dùng lần cuối</th><th></th></tr></thead><tbody>` +
-    keys.map(k => `<tr><td><div class="row" style="gap:8px;flex-wrap:nowrap"><span class="dot ${k.enabled ? "ok" : ""}"></span><b>${esc(k.name)}</b></div></td>
+  $("#keyTable").innerHTML = keys.length ? `<thead><tr><th scope="col">Tên</th><th scope="col">Key</th><th scope="col">Model được dùng</th><th scope="col">Giới hạn</th><th class="num" scope="col">24 giờ qua</th><th scope="col">Dùng lần cuối</th><th scope="col"></th></tr></thead><tbody>` +
+    keys.map(k => `<tr><td><div class="row" style="gap:8px;flex-wrap:nowrap"><span class="lamp ${k.enabled ? "ok" : ""}"></span><b>${esc(k.name)}</b></div></td>
       <td class="mono">${esc(k.prefix)}…</td>
-      <td>${k.allowed_models ? `<div class="chips">${k.allowed_models.map(m => `<span class="chip">${esc(m)}</span>`).join("")}</div>` : `<span class="muted">Tất cả</span>`}</td>
-      <td>${k.rpm ? k.rpm + " / phút" : `<span class="muted">Không</span>`}</td>
-      <td class="num">${k.usage_24h && k.usage_24h.n ? `${fmt(k.usage_24h.n)} req<div class="muted" style="font-size:11.5px">${compact(k.usage_24h.tok)} token${k.usage_24h.err ? ` · <span class="bad">${fmt(k.usage_24h.err)} lỗi</span>` : ""}</div>` : `<span class="muted">–</span>`}</td>
-      <td class="muted">${ago(k.last_used_at)}</td><td class="num"><div class="row" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn sm" onclick="editKey('${k.id}')">Sửa</button>
-      <button class="btn sm ghost danger" onclick="delKey('${k.id}')">Xóa</button></div></td></tr>`).join("") + "</tbody>"
+      <td>${k.allowed_models ? `<div class="chips">${k.allowed_models.map(m => `<span class="chip dashed">${esc(m)}</span>`).join("")}</div>` : `<span class="muted">Tất cả</span>`}</td>
+      <td style="white-space:nowrap">${k.rpm ? k.rpm + " request/phút" : `<span class="muted">Không giới hạn</span>`}</td>
+      <td class="num" style="white-space:nowrap">${k.usage_24h?.n ? `${fmt(k.usage_24h.n)} request<div class="muted" style="font-size:12px">${compact(k.usage_24h.tok)} token${k.usage_24h.err ? `, <span class="bad">${fmt(k.usage_24h.err)} lỗi</span>` : ""}</div>` : `<span class="muted">–</span>`}</td>
+      <td class="muted" style="white-space:nowrap">${ago(k.last_used_at)}</td>
+      <td><div class="row" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn sm" onclick="editKey('${k.id}')">Sửa</button><button class="btn sm ghost danger" onclick="delKey('${k.id}')">Xóa</button></div></td></tr>`).join("") + "</tbody>"
     : `<tbody><tr><td>${empty(`Chưa có key nào. <a href="#" onclick="keyForm(null);return false">Tạo key đầu tiên</a> cho bot của bạn.`, "key")}</td></tr></tbody>`;
 });
 function keyForm(k) {
   const isNew = !k;
   k = k || { name: "", allowed_models: null, rpm: 0, enabled: true };
-  modal(`${mHead(isNew ? "Tạo API key" : "Sửa key", isNew ? "Mỗi bot hoặc ứng dụng nên dùng một key riêng." : "")}
-    <label class="f"><span>Tên</span><input type="text" id="kName" value="${esc(k.name)}" placeholder="vd: lan-anh, claude-code"></label>
-    <label class="f"><span>Chỉ cho phép model</span><input type="text" id="kModels" value="${esc((k.allowed_models || []).join(", "))}" placeholder="để trống = tất cả"><div class="hint">Cách nhau dấu phẩy, hỗ trợ * ở cuối, vd: auto, cx/*</div></label>
-    <label class="f"><span>Giới hạn request / phút</span><input type="number" id="kRpm" value="${k.rpm}" min="0"><div class="hint">0 = không giới hạn</div></label>
-    ${isNew ? "" : `<label class="switch"><input type="checkbox" id="kEn" ${k.enabled ? "checked" : ""}> Bật key</label>`}
-    <div class="row end"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="kSave">${isNew ? "Tạo key" : "Lưu"}</button></div>`, m => {
+  modal(`${mHead(isNew ? "Tạo API key" : "Sửa key", isNew ? "Key chỉ hiện một lần sau khi tạo." : "")}
+    <label class="f"><span>Tên</span><input type="text" id="kName" value="${esc(k.name)}" placeholder="vd: bot-telegram, claude-code"></label>
+    <label class="f"><span>Chỉ cho phép model</span><input type="text" id="kModels" value="${esc((k.allowed_models || []).join(", "))}" placeholder="để trống = tất cả"><div class="hint">Cách nhau bằng dấu phẩy, dùng * ở cuối để chọn cả nhóm, vd: auto, cx/*</div></label>
+    <label class="f"><span>Giới hạn request mỗi phút</span><input type="number" id="kRpm" value="${k.rpm}" min="0"><div class="hint">0 là không giới hạn</div></label>
+    ${isNew ? "" : `<label class="switch"><input type="checkbox" id="kEn" ${k.enabled ? "checked" : ""}><span>Bật key</span></label>`}
+    <div class="foot"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="kSave">${isNew ? "Tạo key" : "Lưu thay đổi"}</button></div>`, m => {
     m.querySelector("#kSave").onclick = run(async () => {
       const body = { name: $("#kName").value, allowed_models: $("#kModels").value, rpm: +$("#kRpm").value };
       if (isNew) {
         const r = await api("/admin/api/keys", { body });
         window._newKey = r.key;
-        modal(`${mHead("Key đã tạo", "Copy và lưu lại ngay: key sẽ <b>không hiện lại</b>.")}
-          <div class="row" style="flex-wrap:nowrap;align-items:stretch"><div class="code" style="flex:1;margin:0">${esc(r.key)}</div>
-            <button class="btn primary" onclick="copyText(window._newKey,'Đã copy key')">${icon("copy")}Copy</button></div>
-          <h3 style="margin:20px 0 10px">Cấu hình dùng ngay</h3>${snippets(r.key)}
-          <div class="row end"><button class="btn primary" onclick="closeModal()">Xong</button></div>`);
+        modal(`${mHead("Đã tạo key", "Copy và lưu lại ngay. Key sẽ không hiện lại.")}
+          <div class="row" style="flex-wrap:nowrap;align-items:stretch;margin-bottom:18px"><div class="code grow">${esc(r.key)}</div>
+            <button class="btn primary" style="height:auto" onclick="copyText(window._newKey,'Đã copy key')">${icon("copy")}Copy</button></div>
+          <h3 style="margin-bottom:10px">Cấu hình mẫu</h3>${snippets(r.key)}
+          <div class="foot"><button class="btn primary" onclick="closeModal()">Xong</button></div>`, null, true);
       } else {
         body.enabled = $("#kEn").checked;
-        await api(`/admin/api/keys/${k.id}`, { method: "PATCH", body }); closeModal(); toast("Đã lưu");
+        await api(`/admin/api/keys/${k.id}`, { method: "PATCH", body }); closeModal(); toast("Đã lưu key");
       }
-      loadKeys(); if (current === "overview") loadOverview();
+      loadKeys();
     });
   });
 }
 window.keyForm = keyForm;
 $("#addKey").onclick = () => keyForm(null);
 window.editKey = id => keyForm(keys.find(k => k.id === id));
-window.delKey = run(async id => { if (!confirm("Xóa key này? Client đang dùng sẽ bị từ chối.")) return;
-  await api(`/admin/api/keys/${id}`, { method: "DELETE" }); loadKeys(); });
+window.delKey = run(async id => { if (!confirm("Xóa key này? Client đang dùng key sẽ bị từ chối ngay.")) return;
+  await api(`/admin/api/keys/${id}`, { method: "DELETE" }); toast("Đã xóa key"); loadKeys(); });
 
 // ---------------------------------------------------------------- playground
-$("#pgMsg").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#pgSend").click(); });
 let pgMode = "chat";
 const PG = { chat: ["Tin nhắn", "Xin chào! Bạn là model nào?", "Gửi"], image: ["Mô tả ảnh", "Một ly trà đào cam sả trên bàn gỗ, nắng sớm, ảnh chụp sản phẩm", "Tạo ảnh"],
   embed: ["Văn bản", "UniRouter là cổng AI tự host.", "Tạo vector"] };
-document.querySelectorAll("#pgMode button").forEach(b => b.addEventListener("click", () => {
+$("#pgMsg").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#pgSend").click(); });
+$$("#pgMode button").forEach(b => b.addEventListener("click", () => {
   const prev = pgMode; pgMode = b.dataset.m;
-  document.querySelectorAll("#pgMode button").forEach(x => x.classList.toggle("on", x === b));
-  document.querySelectorAll(".pg-chat").forEach(e => e.classList.toggle("hide", pgMode !== "chat"));
-  document.querySelectorAll(".pg-image").forEach(e => e.classList.toggle("hide", pgMode !== "image"));
+  $$("#pgMode button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  $$(".pg-chat").forEach(e => e.classList.toggle("hide", pgMode !== "chat"));
+  $$(".pg-image").forEach(e => e.classList.toggle("hide", pgMode !== "image"));
   $("#pgMsgLbl").textContent = PG[pgMode][0];
   if (!$("#pgMsg").value.trim() || $("#pgMsg").value === PG[prev][1]) $("#pgMsg").value = PG[pgMode][1];
-  $("#pgSend").lastChild.textContent = PG[pgMode][2]; $("#pgOut").classList.add("hide");
+  $("#pgSend span").textContent = PG[pgMode][2]; $("#pgOut").classList.add("hide");
 }));
 const triesOf = r => { const t = (r.attempts || []).map(a => `<li><span class="mono">${esc(a.target)}</span>${a.account ? " (" + esc(a.account) + ")" : ""}: <span class="bad">${esc(a.error)}</span></li>`).join("");
-  return t ? `<details style="margin-top:14px"><summary>Đã thử ${(r.attempts || []).length} đích trước đó</summary><ul style="margin:0;padding-left:18px;font-size:13px">${t}</ul></details>` : ""; };
-const okHead = (r, extra) => `<div class="card-h"><div class="row">${pill("ok", "Thành công")}<span class="badge mono">${esc(r.target)}</span><span class="badge">${esc(r.account)}</span></div>
-  <div class="row muted" style="font-size:12px;gap:14px">${extra}</div></div>`;
-const errBox = r => `<div class="card-h"><div class="row">${pill("error", "Lỗi " + (r.status || ""))}</div></div><div class="card-b"><div class="bad">${esc(r.error)}</div>${triesOf(r)}</div>`;
+  return t ? `<details style="margin-top:14px"><summary>Đã chuyển nguồn ${(r.attempts || []).length} lần trước khi thành công</summary><ul style="margin:8px 0 0;padding-left:18px;font-size:13px">${t}</ul></details>` : ""; };
+const okHead = (r, extra) => `<div class="panel-h"><div class="row">${tag("ok", "Thành công")}<span class="tag line mono">${esc(r.target)}</span><span class="tag line">${esc(r.account)}</span></div>
+  <div class="row muted" style="font-size:12.5px;gap:14px">${extra}</div></div>`;
+const errBox = r => `<div class="panel-h"><div class="row">${tag("error", "Lỗi " + (r.status || ""))}${r.target ? `<span class="tag line mono">${esc(r.target)}</span>` : ""}</div></div><div class="panel-b"><div class="bad">${esc(r.error)}</div>${triesOf(r)}</div>`;
 $("#pgSend").onclick = run(async () => {
-  const b = $("#pgSend"); b.disabled = true; b.lastChild.textContent = pgMode === "image" ? "Đang tạo ảnh…" : "Đang gửi…";
-  const out = $("#pgOut"); out.classList.remove("hide");
-  out.innerHTML = `<div class="card-b muted">${pgMode === "image" ? "Đang tạo ảnh, có thể mất 10–60 giây…" : "Đang chờ phản hồi…"}</div>`;
-  try {
+  const b = $("#pgSend"), out = $("#pgOut"), model = $("#pgModel").value;
+  out.classList.remove("hide");
+  out.innerHTML = `<div class="panel-b muted">${pgMode === "image" ? "Đang tạo ảnh, thường mất 10 đến 60 giây…" : "Đang chờ phản hồi…"}</div>`;
+  await busy(b, pgMode === "image" ? "Đang tạo…" : "Đang gửi…", async () => {
     if (pgMode === "image") {
-      const r = await api("/admin/api/playground/image", { body: { model: $("#pgModel").value, prompt: $("#pgMsg").value, size: $("#pgSize").value } });
-      const safe = u => /^(https?:\/\/|\/)/i.test(u || "") ? u : "";
-      out.innerHTML = r.ok ? okHead(r, `<span>${fmt(r.total_ms)} ms</span>`) + `<div class="card-b"><div class="gen">${r.images.filter(i => safe(i.url)).map(i =>
-        `<a href="${esc(i.url)}" target="_blank" rel="noopener"><img src="${esc(i.url)}" alt="${esc(i.revised_prompt || "")}"></a>`).join("")}</div>
+      const r = await api("/admin/api/playground/image", { body: { model, prompt: $("#pgMsg").value, size: $("#pgSize").value } });
+      const safe = u => /^(https?:\/\/|\/)/i.test(u || "");
+      out.innerHTML = r.ok ? okHead(r, `<span>${fmt(r.total_ms)} ms</span>`) + `<div class="panel-b"><div class="gen">${r.images.filter(i => safe(i.url)).map(i =>
+        `<a href="${esc(i.url)}" target="_blank" rel="noopener"><img src="${esc(i.url)}" alt="${esc(i.revised_prompt || "Ảnh đã tạo")}"></a>`).join("")}</div>
         ${r.images[0]?.revised_prompt ? `<p class="hint">${esc(r.images[0].revised_prompt)}</p>` : ""}${triesOf(r)}</div>` : errBox(r);
       return;
     }
     if (pgMode === "embed") {
-      const r = await api("/admin/api/playground/embed", { body: { model: $("#pgModel").value, input: $("#pgMsg").value } });
+      const r = await api("/admin/api/playground/embed", { body: { model, input: $("#pgMsg").value } });
       out.innerHTML = r.ok ? okHead(r, `<span>${fmt(r.dims)} chiều</span><span>${fmt(r.total_ms)} ms</span>`) +
-        `<div class="card-b"><div class="vec">[${(Array.isArray(r.preview) ? r.preview.map(v => Number(v).toFixed(5)).join(", ") : esc(r.preview))}${r.dims > 8 ? ", …" : ""}]</div>${triesOf(r)}</div>` : errBox(r);
+        `<div class="panel-b"><div class="vec">[${Array.isArray(r.preview) ? r.preview.map(v => Number(v).toFixed(5)).join(", ") : esc(r.preview)}${r.dims > 8 ? ", …" : ""}]</div>${triesOf(r)}</div>` : errBox(r);
       return;
     }
-    const r = await api("/admin/api/playground", { body: { model: $("#pgModel").value, system: $("#pgSystem").value, message: $("#pgMsg").value } });
-    const tries = (r.attempts || []).map(a => `<li><span class="mono">${esc(a.target)}</span>${a.account ? " (" + esc(a.account) + ")" : ""}: <span class="bad">${esc(a.error)}</span></li>`).join("");
-    const triesHtml = tries ? `<details style="margin-top:14px"><summary>Đã thử ${(r.attempts || []).length} đích trước đó</summary><ul style="margin:0;padding-left:18px;font-size:13px">${tries}</ul></details>` : "";
-    out.innerHTML = r.ok
-      ? `<div class="card-h"><div class="row">${pill("ok", "Thành công")}<span class="badge mono">${esc(r.target)}</span><span class="badge">${esc(r.account)}</span></div>
-          <div class="row muted" style="font-size:12px;gap:14px"><span>TTFB ${fmt(r.ttfb_ms)} ms</span><span>Tổng ${fmt(r.total_ms)} ms</span>
-          ${r.usage ? `<span>${fmt(r.usage.prompt_tokens)} → ${fmt(r.usage.completion_tokens)} token</span>` : ""}</div></div>
-         <div class="card-b">${r.reasoning ? `<details><summary>Suy luận</summary><div class="code" style="margin-bottom:12px">${esc(r.reasoning)}</div></details>` : ""}
-         <div class="reply">${esc(r.reply)}</div>${triesHtml}</div>`
-      : `<div class="card-h"><div class="row">${pill("error", "Lỗi " + (r.status || ""))}</div></div><div class="card-b"><div class="bad">${esc(r.error)}</div>${triesHtml}</div>`;
-  } finally { b.disabled = false; b.lastChild.textContent = PG[pgMode][2]; }
+    const r = await api("/admin/api/playground", { body: { model, system: $("#pgSystem").value, message: $("#pgMsg").value } });
+    out.innerHTML = r.ok ? okHead(r, `<span>Byte đầu ${fmt(r.ttfb_ms)} ms</span><span>Tổng ${fmt(r.total_ms)} ms</span>${r.usage ? `<span>${fmt(r.usage.prompt_tokens)} → ${fmt(r.usage.completion_tokens)} token</span>` : ""}`) +
+      `<div class="panel-b">${r.reasoning ? `<details style="margin-bottom:12px"><summary>Suy luận của model</summary><div class="code" style="margin-top:8px">${esc(r.reasoning)}</div></details>` : ""}
+       <div class="reply">${esc(r.reply)}</div>${triesOf(r)}</div>` : errBox(r);
+  });
 });
 
-// ---------------------------------------------------------------- snippets
+// ---------------------------------------------------------------- snippets + settings
 function snippets(key) {
   const base = location.origin, k = esc(key || "sk-uni-…");
-  const block = (title, sub, code) => `<div style="margin-bottom:14px"><div class="row between" style="margin-bottom:6px"><div><b>${title}</b> <span class="muted" style="font-size:12px">${sub}</span></div>
+  const block = (title, sub, code) => `<div style="margin-bottom:16px"><div class="row between" style="margin-bottom:6px"><div><b>${title}</b> <span class="muted" style="font-size:12.5px">${sub}</span></div>
     <button class="btn sm ghost" onclick="copyText(this.parentNode.nextElementSibling.textContent)">${icon("copy")}Copy</button></div><div class="code">${code}</div></div>`;
-  return block("Bot / OpenAI SDK", "Telegram, Discord, n8n, Dify…", `base_url = ${esc(base)}/v1
-api_key  = ${k}
-model    = auto`)
-  + block("Claude Code", "biến môi trường", `export ANTHROPIC_BASE_URL=${esc(base)}
-export ANTHROPIC_AUTH_TOKEN=${k}
-export ANTHROPIC_MODEL=auto`)
-  + block("Codex CLI", "~/.codex/config.toml", `model = "auto"
-model_provider = "unirouter"
-[model_providers.unirouter]
-name = "UniRouter"
-base_url = "${esc(base)}/v1"
-env_key = "UNIROUTER_API_KEY"
-wire_api = "responses"`)
-  + block("Tạo ảnh", "POST /v1/images/generations", `curl ${esc(base)}/v1/images/generations -H "Authorization: Bearer ${k}" \\
-  -H "Content-Type: application/json" -d '{"model":"auto","prompt":"một chú mèo cam","size":"1024x1024"}'
-# trả về data[0].url (link tạm 24 giờ) và data[0].b64_json`)
-  + block("Embeddings", "POST /v1/embeddings", `curl ${esc(base)}/v1/embeddings -H "Authorization: Bearer ${k}" \\
-  -H "Content-Type: application/json" -d '{"model":"auto","input":"Xin chào"}'`)
-  + block("Kiểm tra nhanh", "curl", `curl ${esc(base)}/v1/chat/completions -H "Authorization: Bearer ${k}" \\
-  -H "Content-Type: application/json" -d '{"model":"auto","messages":[{"role":"user","content":"Xin chào"}]}'`)
-  + `<p class="hint">Model <span class="mono">auto</span> tự dùng mọi provider đã thêm; lỗi hoặc hết hạn mức thì chuyển sang provider kế tiếp. Có thể thay bằng tên combo hoặc <span class="mono">tiền_tố/model</span>.</p>`;
+  return block("Bot / OpenAI SDK", "Telegram, Discord, n8n, Dify…", `base_url = ${esc(base)}/v1\napi_key  = ${k}\nmodel    = auto`)
+    + block("Claude Code", "biến môi trường", `export ANTHROPIC_BASE_URL=${esc(base)}\nexport ANTHROPIC_AUTH_TOKEN=${k}\nexport ANTHROPIC_MODEL=auto`)
+    + block("Codex CLI", "~/.codex/config.toml", `model = "auto"\nmodel_provider = "unirouter"\n[model_providers.unirouter]\nname = "UniRouter"\nbase_url = "${esc(base)}/v1"\nenv_key = "UNIROUTER_API_KEY"\nwire_api = "responses"`)
+    + block("Gemini web", "chat qua tài khoản Google, có tìm kiếm web", `model = gmw/gemini-flash   # hoặc gmw/gemini-pro, gmw/gemini-thinking\n# không hỗ trợ tool calling: request có tools sẽ tự chuyển sang nguồn khác`)
+    + block("Kiểm tra nhanh", "curl", `curl ${esc(base)}/v1/chat/completions -H "Authorization: Bearer ${k}" \\\n  -H "Content-Type: application/json" -d '{"model":"auto","messages":[{"role":"user","content":"Xin chào"}]}'`)
+    + `<p class="hint">Model <span class="mono">auto</span> tự dùng mọi nguồn đã thêm, gặp lỗi hoặc hết hạn mức thì chuyển sang nguồn kế tiếp. Có thể thay bằng tên combo hoặc <span class="mono">tiền_tố/model</span>.</p>`;
 }
-
-// ---------------------------------------------------------------- settings
 const loadSettings = run(async () => {
   const s = (await api("/admin/api/settings")).data;
   $("#sDefault").value = s.default_model || ""; $("#sFallback").checked = !!s.unknown_model_fallback; $("#sRtk").checked = !!s.rtk_enabled;
   $("#sThr").value = s.breaker_threshold; $("#sCool").value = s.breaker_cooldown; $("#sDays").value = s.usage_retention_days; $("#sRows").value = s.usage_max_rows;
-  refreshModelOptions();
-  $("#howto").innerHTML = snippets(null);
+  refreshModelOptions(); $("#howto").innerHTML = snippets(null);
 });
 $("#saveSettings").onclick = run(async () => {
   await api("/admin/api/settings", { body: { default_model: $("#sDefault").value, unknown_model_fallback: $("#sFallback").checked,
@@ -1081,27 +1216,28 @@ $("#saveSettings").onclick = run(async () => {
 });
 
 // ---------------------------------------------------------------- theme
-const THEMES = ["auto", "light", "dark"], THEME_LBL = { auto: "Theo hệ thống", light: "Sáng", dark: "Tối" };
+const THEMES = ["auto", "light", "dark"], THEME_LBL = { auto: "theo hệ thống", light: "sáng", dark: "tối" };
 function applyTheme(t) {
   if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
-  document.querySelectorAll(".themeBtn").forEach(b => { b.title = "Giao diện: " + THEME_LBL[t]; b.querySelector("use").setAttribute("href", "#i-" + (t === "auto" ? "auto" : t === "light" ? "sun" : "moon")); });
+  $$(".themeBtn").forEach(b => { b.title = "Giao diện: " + THEME_LBL[t]; b.querySelector("use").setAttribute("href", "#i-" + (t === "auto" ? "auto" : t === "light" ? "sun" : "moon")); });
 }
-let theme = "auto"; try { theme = localStorage.getItem("uni-theme") || "auto"; } catch (e) {}
+let theme = "auto"; try { theme = localStorage.getItem("uni-theme") || "auto"; } catch (e) { /* bỏ qua */ }
 if (!THEMES.includes(theme)) theme = "auto";
 applyTheme(theme);
-document.querySelectorAll(".themeBtn").forEach(b => b.addEventListener("click", () => {
+$$(".themeBtn").forEach(b => b.addEventListener("click", () => {
   theme = THEMES[(THEMES.indexOf(theme) + 1) % 3]; applyTheme(theme);
-  try { localStorage.setItem("uni-theme", theme); } catch (e) {}
+  try { localStorage.setItem("uni-theme", theme); } catch (e) { /* bỏ qua */ }
   toast("Giao diện: " + THEME_LBL[theme]);
 }));
 
 // ---------------------------------------------------------------- start
 async function start() {
-  const me = await (await fetch("/admin/api/me")).json();
-  if (me.version) $("#loginVer").textContent = "unirouter v" + me.version;
-  if (!me.authenticated) { showLogin(me.enabled === false ? "Trang quản trị đang tắt: hãy đặt biến môi trường ADMIN_PASSWORD rồi khởi động lại." : ""); return; }
+  let me;
+  try { me = await (await fetch("/admin/api/me")).json(); } catch (e) { showLogin("Không kết nối được máy chủ UniRouter."); return; }
+  if (me.version) $("#loginVer").textContent = "Phiên bản " + me.version;
+  if (!me.authenticated) { showLogin(me.enabled === false ? "Trang quản trị đang tắt. Đặt biến môi trường ADMIN_PASSWORD rồi khởi động lại." : ""); return; }
   $("#login").classList.add("hide"); $("#app").classList.remove("hide");
-  let tab = "overview"; try { tab = localStorage.getItem("uni-tab") || tab; } catch (e) {}
+  let tab = "overview"; try { tab = localStorage.getItem("uni-tab") || tab; } catch (e) { /* bỏ qua */ }
   openTab(tab);
 }
 setInterval(() => { if (current === "overview" && !document.hidden && !$("#app").classList.contains("hide") && !$("#modalRoot").innerHTML) loadOverview(); }, 30000);

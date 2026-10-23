@@ -18,7 +18,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from . import config
 from .db import now_ms
 from .formats.chat import ChatWriter
-from .providers import codex_auth
+from .providers import codex_auth, gemini_web_auth
 from .providers.base import CallContext, ProviderError, Target
 from .router import GatewayError
 
@@ -134,7 +134,7 @@ def connection_view(st, c: dict[str, Any]) -> dict[str, Any]:
     now = time.time()
     wait = max(0.0, max(h.cooldown_until, h.open_until) - now)
     view = {k: c[k] for k in ("id", "provider_id", "label", "enabled", "priority", "last_error", "last_used_at", "created_at")}
-    view["meta"] = {k: v for k, v in (c.get("meta") or {}).items() if k in ("email", "plan", "account_id")}
+    view["meta"] = {k: v for k, v in (c.get("meta") or {}).items() if k in ("email", "plan", "account_id", "missing_scopes")}
     view["blocked_for"] = int(wait)
     view["block_reason"] = h.last_reason if wait else ""
     try:
@@ -146,6 +146,9 @@ def connection_view(st, c: dict[str, Any]) -> dict[str, Any]:
     if "access_token" in secret or "refresh_token" in secret:
         view["expires_at"] = secret.get("expires_at")
         view["has_refresh"] = bool(secret.get("refresh_token"))
+    if "cookies" in secret:
+        view["cookie_fp"] = (c.get("meta") or {}).get("cookie_fp") or "set"
+        view["rotated_at"] = secret.get("rotated_at")
     if not c["enabled"]:
         view["health"] = "disabled"
     elif wait:
@@ -355,6 +358,8 @@ async def add_connection(pid: str, request: Request):
         raise HTTPException(404, "Không có provider này")
     if p["type"] == "codex":
         raise HTTPException(400, "ChatGPT dùng đăng nhập thiết bị hoặc nhập auth.json")
+    if p["type"] == "gemini_web":
+        raise HTTPException(400, "Gemini Web dùng nút \"Dán cookie\"")
     keys = [k.strip() for k in str(data.get("api_key") or "").replace(",", "\n").split("\n") if k.strip()]
     if not keys:
         raise HTTPException(400, "Nhập ít nhất 1 API key (mỗi dòng 1 key để thêm nhiều)")
@@ -540,6 +545,9 @@ async def codex_device_poll(request: Request):
 def save_codex_account(st, pid: str, tokens: dict[str, Any], label: str | None) -> str:
     info = codex_auth.account_info(tokens)
     meta = {k: v for k, v in info.items() if k in ("account_id", "email", "plan")}
+    meta["missing_scopes"] = info.get("missing_scopes") or []
+    # Mốc refresh để keepalive không xoay token ngay sau khi vừa nhập/đăng nhập.
+    tokens.setdefault("refreshed_at", now_ms())
     if tokens.get("account_id") and not meta.get("account_id"):
         meta["account_id"] = tokens.pop("account_id")
     tokens.pop("account_id", None)
@@ -555,6 +563,58 @@ def save_codex_account(st, pid: str, tokens: dict[str, Any], label: str | None) 
     if meta.get("plan") and label is None:
         name = f"{name} ({meta['plan']})"
     return st.store.add_connection(pid, name, tokens, meta)["id"]
+
+
+@router.post("/admin/api/codex/pkce/start")
+async def codex_pkce_start(request: Request):
+    """Bắt đầu đăng nhập PKCE (dán callback) - phương án dự phòng khi mã thiết bị lỗi.
+
+    Verifier + state lưu trong DB (tái dùng bảng device_logins) để restart giữa chừng không mất.
+    """
+    require_admin(request)
+    st = S(request)
+    data = await request.json() if (await request.body()) else {}
+    pid = data.get("provider_id") or "codex"
+    verifier, challenge = codex_auth.pkce_challenge()
+    state = uuid.uuid4().hex
+    login_id = uuid.uuid4().hex
+    st.store.x("INSERT INTO device_logins (id,provider_id,device_auth_id,user_code,interval_seconds,label,status,expires_at,created_at)"
+               " VALUES (?,?,?,?,0,?,'pkce',?,?)",
+               (login_id, pid, verifier, state, str(data.get("label") or "")[:100],
+                now_ms() + 15 * 60_000, now_ms()))
+    return {"login_id": login_id, "authorize_url": codex_auth.pkce_authorize_url(state, challenge)}
+
+
+@router.post("/admin/api/codex/pkce/complete")
+async def codex_pkce_complete(request: Request):
+    require_admin(request)
+    st = S(request)
+    data = await request.json()
+    rows = st.store.q("SELECT * FROM device_logins WHERE id=?", (str(data.get("login_id") or ""),))
+    if not rows:
+        raise HTTPException(404, "Phiên đăng nhập không tồn tại")
+    row = dict(rows[0])
+    if row["status"] != "pkce":
+        raise HTTPException(400, "Phiên đăng nhập không hợp lệ")
+    if row["expires_at"] < now_ms():
+        st.store.x("UPDATE device_logins SET status='expired' WHERE id=?", (row["id"],))
+        raise HTTPException(400, "Phiên đăng nhập đã hết hạn, bắt đầu lại")
+    params = codex_auth.parse_callback(str(data.get("callback_url") or ""))
+    if params.get("error"):
+        raise HTTPException(400, f"Đăng nhập bị từ chối: {params.get('error_description') or params['error']}")
+    if params.get("state") != row["user_code"]:
+        raise HTTPException(400, "State không khớp. Dán đúng URL callback của lần đăng nhập này.")
+    code = params.get("code")
+    if not code:
+        raise HTTPException(400, "URL callback không có mã code")
+    try:
+        tokens = await codex_auth.pkce_exchange(code, row["device_auth_id"])
+    except ProviderError as e:
+        raise HTTPException(502, e.message) from e
+    cid = save_codex_account(st, row["provider_id"], tokens, row["label"] or None)
+    st.store.x("UPDATE device_logins SET status='completed' WHERE id=?", (row["id"],))
+    st.store.x("DELETE FROM device_logins WHERE created_at < ?", (now_ms() - 86400_000,))
+    return {"ok": True, "connection_id": cid}
 
 
 @router.post("/admin/api/codex/import")
@@ -574,6 +634,49 @@ async def codex_import(request: Request):
         except ProviderError as e:
             raise HTTPException(502, e.message) from e
     cid = save_codex_account(st, data.get("provider_id") or "codex", tokens, str(data.get("label") or "") or None)
+    return {"ok": True, "connection_id": cid}
+
+
+# ------------------------------------------------------------------ gemini web cookie
+@router.post("/admin/api/gemini-web/cookie")
+async def gemini_web_cookie(request: Request):
+    """Dán cookie gemini.google.com -> tạo/ cập nhật một tài khoản Gemini Web."""
+    require_admin(request)
+    st = S(request)
+    data = await request.json()
+    pid = str(data.get("provider_id") or "gemini-web")
+    provider = st.store.providers.get(pid)
+    if not provider or provider["type"] != "gemini_web":
+        raise HTTPException(400, "Provider không phải Gemini Web")
+    try:
+        parsed = gemini_web_auth.parse_cookie_text(str(data.get("cookie") or ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    cookies = parsed["cookies"]
+    meta = gemini_web_auth.account_hint(cookies)
+    secret = {"cookies": cookies, "rotated_at": 0}
+    # Cập nhật đúng tài khoản được chọn (nút "Dán cookie mới"), hoặc cùng dấu vân cookie -> không thêm bản trùng
+    target_id = str(data.get("connection_id") or "")
+    for c in st.store.provider_connections(pid):
+        if c["id"] == target_id or (not target_id and (c.get("meta") or {}).get("cookie_fp") == meta.get("cookie_fp")):
+            if str(data.get("label") or "").strip():
+                st.store.update_connection(c["id"], {"label": str(data["label"]).strip()[:100]})
+            st.store.update_connection_secret(c["id"], secret, {**c["meta"], **meta})
+            st.store.update_connection(c["id"], {"enabled": True})
+            st.health.reset(c["id"])
+            cid = c["id"]
+            break
+    else:
+        label = str(data.get("label") or "").strip() or f"Gemini {time.strftime('%d/%m %H:%M')}"
+        cid = st.store.add_connection(pid, label, secret, meta)["id"]
+    # Kiểm tra cookie sống + xoay lần đầu ngay, báo lỗi rõ nếu Google từ chối.
+    try:
+        gemini_web_auth.invalidate(cid)
+        await gemini_web_auth.ensure_session(st.store, st.store.connections[cid],
+                                              config.GEMINI_WEB_PROXY or None, force_rotate=True, refresh_page=True)
+    except ProviderError as e:
+        st.store.set_connection_error(cid, f"[{e.status}] {e.message}"[:300])
+        return {"ok": False, "connection_id": cid, "status": e.status, "error": e.message}
     return {"ok": True, "connection_id": cid}
 
 

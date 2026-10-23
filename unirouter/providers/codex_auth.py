@@ -17,6 +17,11 @@ from .base import ProviderError
 
 AUTH_BASE = "https://auth.openai.com"
 CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize"
+PKCE_REDIRECT = "http://localhost:1455/auth/callback"
+PKCE_SCOPE = "openid profile email offline_access api.connectors.read api.connectors.invoke"
+# Scope mà token Codex nên có; thiếu thì chỉ cảnh báo trong trang quản trị (không chặn).
+CODEX_SCOPES = ("api.connectors.read", "api.connectors.invoke")
 CODEX_VERSION = "0.159.0"
 USER_AGENT = f"codex_cli_rs/{CODEX_VERSION}"
 VERIFICATION_URL = "https://auth.openai.com/codex/device"
@@ -93,6 +98,10 @@ def account_info(tokens: dict[str, Any]) -> dict[str, Any]:
         info.setdefault("email", claims.get("email") or profile.get("email"))
         if key == "access_token" and claims.get("exp"):
             info["exp_ms"] = int(claims["exp"]) * 1000
+        if key == "access_token" and (claims.get("scp") or claims.get("scope")):
+            scopes = claims.get("scp") or claims.get("scope")
+            scopes = scopes.split() if isinstance(scopes, str) else list(scopes)
+            info["missing_scopes"] = [s for s in CODEX_SCOPES if s not in scopes]
     return {k: v for k, v in info.items() if v}
 
 
@@ -157,6 +166,50 @@ async def device_poll(device_auth_id: str, user_code: str) -> dict[str, Any] | N
         raise ProviderError(502, "Thiếu authorization_code/code_verifier", "request")
     tok = await session().post(f"{AUTH_BASE}/oauth/token", headers=_auth_headers(False), data={
         "grant_type": "authorization_code", "code": code, "redirect_uri": DEVICE_REDIRECT,
+        "client_id": CLIENT_ID, "code_verifier": verifier}, timeout=30, **hv(AUTH_BASE))
+    if tok.status_code >= 400:
+        raise ProviderError(502, f"Đổi token thất bại: {_err(tok)}", "request")
+    return normalize_tokens(tok.json())
+
+
+# ------------------------------------------------------------------ PKCE (dán callback)
+def pkce_challenge() -> tuple[str, str]:
+    """Trả về (verifier, challenge) cho luồng PKCE S256."""
+    import hashlib
+
+    verifier = base64.urlsafe_b64encode(__import__("secrets").token_bytes(48)).rstrip(b"=").decode()
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+    return verifier, challenge
+
+
+def pkce_authorize_url(state: str, challenge: str) -> str:
+    from urllib.parse import urlencode
+
+    params = {
+        "response_type": "code",
+        "client_id": CLIENT_ID,
+        "redirect_uri": PKCE_REDIRECT,
+        "scope": PKCE_SCOPE,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "id_token_add_organizations": "true",
+        "codex_cli_simplified_flow": "true",
+        "state": state,
+        "originator": "codex_cli_rs",
+    }
+    return f"{AUTHORIZE_URL}?{urlencode(params)}"
+
+
+def parse_callback(callback_url: str) -> dict[str, str]:
+    from urllib.parse import parse_qs, urlparse
+
+    q = parse_qs(urlparse(callback_url.strip()).query)
+    return {k: v[0] for k, v in q.items() if v}
+
+
+async def pkce_exchange(code: str, verifier: str) -> dict[str, Any]:
+    tok = await session().post(f"{AUTH_BASE}/oauth/token", headers=_auth_headers(False), data={
+        "grant_type": "authorization_code", "code": code, "redirect_uri": PKCE_REDIRECT,
         "client_id": CLIENT_ID, "code_verifier": verifier}, timeout=30, **hv(AUTH_BASE))
     if tok.status_code >= 400:
         raise ProviderError(502, f"Đổi token thất bại: {_err(tok)}", "request")
@@ -236,8 +289,24 @@ async def ensure_access_token(store: Any, connection: dict[str, Any], force: boo
         new = await refresh_tokens(secret["refresh_token"])
         info = account_info(new)
         meta.update({k: v for k, v in info.items() if k in ("account_id", "email", "plan")})
-        store.update_connection_secret(cid, new, meta)
-        store.set_connection_error(cid, None)
+        meta["missing_scopes"] = info.get("missing_scopes") or []
+        try:
+            store.update_connection_secret(cid, new, meta)
+            store.set_connection_error(cid, None)
+        except Exception as exc:  # noqa: BLE001 - vd đĩa đầy: ĐỪNG vứt token đã xoay
+            # Token mới (đặc biệt refresh_token đã xoay) phải được dùng, nếu không lần sau sẽ gửi lại
+            # refresh_token cũ và OpenAI thu hồi cả phiên. Giữ trong RAM để request này và các request
+            # kế tiếp dùng được; keepalive/ lần refresh sau sẽ thử lưu lại.
+            import logging
+            logging.getLogger("unirouter.codex").error(
+                "Không lưu được token ChatGPT đã làm mới (%s); giữ tạm trong bộ nhớ.", exc)
+            c = store.connections.get(cid)
+            if c is not None:
+                try:
+                    c["secret_enc"] = store.crypto.enc(new)
+                    c["meta"] = meta
+                except Exception:  # noqa: BLE001
+                    pass
         return new["access_token"], meta.get("account_id") or ""
 
 
