@@ -113,6 +113,13 @@ input[type=text], input[type=password], input[type=number], input[type=search], 
 textarea { min-height: 84px; resize: vertical; font-family: var(--mono); font-size: 13px; line-height: 1.45; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .hint { margin-top: 6px; font-size: 12.5px; color: var(--ink-3); }
+.kp-list { border: 1px solid var(--line); border-radius: 10px; max-height: 260px; overflow-y: auto; margin-bottom: 14px; }
+.kp-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--line-2); }
+.kp-row:last-child { border-bottom: 0; }
+.kp-row label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; cursor: pointer; }
+.kp-row label b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 560; }
+.kp-num { min-width: 22px; height: 22px; border-radius: 99px; background: var(--accent-soft); color: var(--accent-text); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.kp-row:not(.on) .kp-num { visibility: hidden; }
 .switch { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; cursor: pointer; }
 .switch input { width: 34px; height: 20px; appearance: none; border-radius: 99px; background: var(--line); position: relative; cursor: pointer; flex: none; margin: 0; transition: background .15s; }
 .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
@@ -1101,28 +1108,83 @@ window.delCombo = run(async i => { const name = combos[i].name; if (!confirm(`X�
 // ---------------------------------------------------------------- keys
 const loadKeys = loader("#keyWrap", async () => {
   if (!$("#keyTable")) $("#keyWrap").innerHTML = '<table id="keyTable"></table>';
+  if (!providers.length) providers = (await api("/admin/api/providers")).data;  // tên nguồn cho cột "Nguồn trả lời"
   keys = (await api("/admin/api/keys")).data;
-  $("#keyTable").innerHTML = keys.length ? `<thead><tr><th scope="col">Tên</th><th scope="col">Key</th><th scope="col">Model được dùng</th><th scope="col">Giới hạn</th><th class="num" scope="col">24 giờ qua</th><th scope="col">Dùng lần cuối</th><th scope="col"></th></tr></thead><tbody>` +
+  $("#keyTable").innerHTML = keys.length ? `<thead><tr><th scope="col">Tên</th><th scope="col">Key</th><th scope="col">Model được dùng</th><th scope="col">Nguồn trả lời</th><th scope="col">Giới hạn</th><th class="num" scope="col">24 giờ qua</th><th scope="col">Dùng lần cuối</th><th scope="col"></th></tr></thead><tbody>` +
     keys.map(k => `<tr><td><div class="row" style="gap:8px;flex-wrap:nowrap"><span class="lamp ${k.enabled ? "ok" : ""}"></span><b>${esc(k.name)}</b></div></td>
-      <td class="mono">${esc(k.prefix)}…</td>
+      <td class="mono" style="white-space:nowrap">${esc(k.prefix)}…</td>
       <td>${k.allowed_models ? `<div class="chips">${k.allowed_models.map(m => `<span class="chip dashed">${esc(m)}</span>`).join("")}</div>` : `<span class="muted">Tất cả</span>`}</td>
+      <td>${keyProvCell(k)}</td>
       <td style="white-space:nowrap">${k.rpm ? k.rpm + " request/phút" : `<span class="muted">Không giới hạn</span>`}</td>
       <td class="num" style="white-space:nowrap">${k.usage_24h?.n ? `${fmt(k.usage_24h.n)} request<div class="muted" style="font-size:12px">${compact(k.usage_24h.tok)} token${k.usage_24h.err ? `, <span class="bad">${fmt(k.usage_24h.err)} lỗi</span>` : ""}</div>` : `<span class="muted">–</span>`}</td>
       <td class="muted" style="white-space:nowrap">${ago(k.last_used_at)}</td>
       <td><div class="row" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn sm" onclick="editKey('${k.id}')">Sửa</button><button class="btn sm ghost danger" onclick="delKey('${k.id}')">Xóa</button></div></td></tr>`).join("") + "</tbody>"
     : `<tbody><tr><td>${empty(`Chưa có key nào. <a href="#" onclick="keyForm(null);return false">Tạo key đầu tiên</a> cho bot của bạn.`, "key")}</td></tr></tbody>`;
 });
-function keyForm(k) {
+// Nguồn trả lời của key: "only" = chỉ các nguồn đã chọn, "prefer" = thử các nguồn đó trước. Thứ tự = ưu tiên.
+const KMODE = { all: "Tất cả nguồn (mặc định)", only: "Chỉ dùng các nguồn đã chọn", prefer: "Ưu tiên các nguồn đã chọn, lỗi thì dùng nguồn khác" };
+const provName = pid => providers.find(p => p.id === pid)?.name || `${pid} (đã xóa)`;
+function keyProvCell(k) {
+  if (!k.providers?.length) return `<span class="muted">Tất cả</span>`;
+  const chips = k.providers.map((pid, i) => `<span class="chip dashed">${k.providers.length > 1 ? `${i + 1}. ` : ""}${esc(provName(pid))}</span>`).join("");
+  return `<div class="chips">${chips}</div><div class="muted" style="font-size:12px;margin-top:4px">${k.provider_mode === "prefer" ? "ưu tiên, lỗi thì dùng nguồn khác" : "chỉ dùng các nguồn này"}</div>`;
+}
+function keyProvRows(k) {
+  const chosen = k.providers || [];
+  const rest = providers.filter(p => !chosen.includes(p.id))
+    .sort((a, b) => (b.connections.length > 0) - (a.connections.length > 0));
+  const rows = [...chosen.map(pid => ({ id: pid, on: true })), ...rest.map(p => ({ id: p.id, on: false }))];
+  return rows.map(r => {
+    const p = providers.find(x => x.id === r.id);
+    const sub = !p ? "đã xóa" : p.connections.length ? `<span class="mono">${esc(p.alias)}</span>` : "chưa có tài khoản";
+    return `<div class="kp-row${r.on ? " on" : ""}" data-pid="${esc(r.id)}"><span class="kp-num"></span>
+      <label><input type="checkbox" ${r.on ? "checked" : ""}><b>${esc(p ? p.name : r.id)}</b><span class="muted" style="font-size:12px">${sub}</span></label>
+      <button type="button" class="btn sm ghost" data-mv="-1" aria-label="Lên trên">↑</button><button type="button" class="btn sm ghost" data-mv="1" aria-label="Xuống dưới">↓</button></div>`;
+  }).join("");
+}
+function keyProvNumber(list) {
+  let n = 0;
+  list.querySelectorAll(".kp-row").forEach(row => {
+    const on = row.querySelector("input").checked;
+    row.classList.toggle("on", on);
+    row.querySelector(".kp-num").textContent = on ? ++n : "";
+  });
+}
+async function keyForm(k) {
+  if (!providers.length) {
+    try { providers = (await api("/admin/api/providers")).data; } catch (e) { toast(e.message, true); return; }
+  }
   const isNew = !k;
-  k = k || { name: "", allowed_models: null, rpm: 0, enabled: true };
+  k = k || { name: "", allowed_models: null, providers: null, provider_mode: "only", rpm: 0, enabled: true };
+  const mode = k.providers?.length ? (k.provider_mode || "only") : "all";
   modal(`${mHead(isNew ? "Tạo API key" : "Sửa key", isNew ? "Key chỉ hiện một lần sau khi tạo." : "")}
     <label class="f"><span>Tên</span><input type="text" id="kName" value="${esc(k.name)}" placeholder="vd: bot-telegram, claude-code"></label>
     <label class="f"><span>Chỉ cho phép model</span><input type="text" id="kModels" value="${esc((k.allowed_models || []).join(", "))}" placeholder="để trống = tất cả"><div class="hint">Cách nhau bằng dấu phẩy, dùng * ở cuối để chọn cả nhóm, vd: auto, cx/*</div></label>
+    <label class="f"><span>Nguồn trả lời</span><select id="kMode">${Object.entries(KMODE).map(([v, t]) => `<option value="${v}" ${v === mode ? "selected" : ""}>${t}</option>`).join("")}</select>
+      <div class="hint">Chọn một nguồn để key luôn trả lời bằng nguồn đó, hoặc chọn nhiều nguồn và xếp thứ tự bằng ↑ ↓: nguồn số 1 được thử trước, lỗi thì sang nguồn số 2…</div></label>
+    <div class="kp-list" id="kProv" ${mode === "all" ? "hidden" : ""}>${keyProvRows(k)}</div>
     <label class="f"><span>Giới hạn request mỗi phút</span><input type="number" id="kRpm" value="${k.rpm}" min="0"><div class="hint">0 là không giới hạn</div></label>
     ${isNew ? "" : `<label class="switch"><input type="checkbox" id="kEn" ${k.enabled ? "checked" : ""}><span>Bật key</span></label>`}
     <div class="foot"><button class="btn" onclick="closeModal()">Hủy</button><button class="btn primary" id="kSave">${isNew ? "Tạo key" : "Lưu thay đổi"}</button></div>`, m => {
+    const list = m.querySelector("#kProv");
+    keyProvNumber(list);
+    m.querySelector("#kMode").onchange = e => { list.hidden = e.target.value === "all"; };
+    list.addEventListener("change", () => keyProvNumber(list));
+    list.addEventListener("click", e => {
+      const btn = e.target.closest("[data-mv]");
+      if (!btn) return;
+      const row = btn.closest(".kp-row");
+      if (btn.dataset.mv === "-1" && row.previousElementSibling) list.insertBefore(row, row.previousElementSibling);
+      if (btn.dataset.mv === "1" && row.nextElementSibling) list.insertBefore(row.nextElementSibling, row);
+      if (!row.querySelector("input").checked) { row.querySelector("input").checked = true; }
+      keyProvNumber(list); btn.focus();
+    });
     m.querySelector("#kSave").onclick = run(async () => {
-      const body = { name: $("#kName").value, allowed_models: $("#kModels").value, rpm: +$("#kRpm").value };
+      const kMode = $("#kMode").value;
+      const picked = [...list.querySelectorAll(".kp-row")].filter(r => r.querySelector("input").checked).map(r => r.dataset.pid);
+      if (kMode !== "all" && !picked.length) throw new Error("Chọn ít nhất một nguồn, hoặc để \"Tất cả nguồn\"");
+      const body = { name: $("#kName").value, allowed_models: $("#kModels").value, rpm: +$("#kRpm").value,
+        providers: kMode === "all" ? [] : picked, provider_mode: kMode === "all" ? "only" : kMode };
       if (isNew) {
         const r = await api("/admin/api/keys", { body });
         window._newKey = r.key;

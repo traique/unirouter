@@ -1127,3 +1127,62 @@ def test_gemini_web_cookies_not_shared_between_accounts(env):
         gwa._session = None; gwa._locks.clear()
     finally:
         st.store.delete_connection(c2["id"])
+
+
+# ------------------------------------------------------------------ nguồn trả lời theo API key
+def test_key_provider_order_and_only(env):
+    st = env["st"]
+    targets = [t for t in st.router.resolve("ok")[0] if t.provider["id"] in ("mock", "mock2")]
+    assert [t.provider["id"] for t in targets] == ["mock", "mock2"]
+    prefer = {"providers": ["mock2"], "provider_mode": "prefer"}
+    assert [t.provider["id"] for t in st.router.for_key(targets, prefer)] == ["mock2", "mock"]
+    only = {"providers": ["mock2"], "provider_mode": "only"}
+    assert [t.provider["id"] for t in st.router.for_key(targets, only)] == ["mock2"]
+    order = {"providers": ["mock2", "mock"], "provider_mode": "only"}
+    assert [t.provider["id"] for t in st.router.for_key(targets, order)] == ["mock2", "mock"]
+    auto, _ = st.router.resolve("auto")
+    assert [t.provider["id"] for t in st.router.for_key(auto, only)] == ["mock2"]
+
+
+def test_key_pinned_to_one_provider(env):
+    st = env["st"]
+    raw = st.store.create_key("pinned", None, 0, ["mock2"], "only")
+    c = oa(env, raw)
+    r = c.chat.completions.create(model="ok", messages=[{"role": "user", "content": "hi"}])
+    assert r.choices[0].message.content == "Hello from ok"
+    st.usage.flush()
+    row = st.store.q("SELECT provider FROM usage WHERE key_name='pinned' ORDER BY id DESC LIMIT 1")[0]
+    assert row["provider"] == "mock2"
+    with pytest.raises(openai.PermissionDeniedError):  # đích danh nguồn khác -> từ chối, không lách
+        c.chat.completions.create(model="mk/ok", messages=[{"role": "user", "content": "hi"}])
+    ids = [m.id for m in c.models.list().data]
+    assert "mk2/ok" in ids and not any(i.startswith("mk/") for i in ids)
+
+
+def test_key_providers_admin_api(env, admin):
+    r = admin.post("/admin/api/keys", json={"name": "kp", "providers": ["mock2", "mock"], "provider_mode": "prefer"})
+    assert r.status_code == 200
+    k = next(k for k in admin.get("/admin/api/keys").json()["data"] if k["name"] == "kp")
+    assert k["providers"] == ["mock2", "mock"] and k["provider_mode"] == "prefer"
+    assert admin.patch(f"/admin/api/keys/{k['id']}", json={"providers": ["nope"]}).status_code == 400
+    assert admin.patch(f"/admin/api/keys/{k['id']}", json={"provider_mode": "bad"}).status_code == 400
+    assert admin.patch(f"/admin/api/keys/{k['id']}", json={"providers": []}).status_code == 200
+    k = next(k for k in admin.get("/admin/api/keys").json()["data"] if k["name"] == "kp")
+    assert k["providers"] is None
+    assert admin.post("/admin/api/keys", json={"name": "x", "providers": ["nope"]}).status_code == 400
+
+
+def test_key_providers_migrates_old_db(tmp_path):
+    import sqlite3
+    from unirouter.db import Store
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE api_keys (id TEXT PRIMARY KEY, name TEXT NOT NULL, key_hash TEXT NOT NULL UNIQUE, "
+                "prefix TEXT NOT NULL, allowed_models TEXT, rpm INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL "
+                "DEFAULT 1, last_used_at INTEGER, created_at INTEGER NOT NULL)")
+    con.execute("INSERT INTO api_keys (id,name,key_hash,prefix,created_at) VALUES ('a','old','h','sk-uni-x',1)")
+    con.commit()
+    con.close()
+    store = Store(str(path))
+    k = store.keys["h"]
+    assert k["providers"] is None and k["provider_mode"] == "only"
