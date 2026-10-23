@@ -28,6 +28,7 @@ TICK_SECONDS = 10 * 60
 CODEX_REFRESH_AFTER_MS = 7 * 24 * 3600 * 1000  # chỉ refresh ChatGPT khi đã quá 7 ngày
 GEMINI_ROTATE_AFTER_MS = 9 * 60 * 1000         # xoay cookie Gemini ~mỗi 10 phút như Chrome
 GEMINI_VALIDATE_AFTER_MS = 60 * 60 * 1000      # kiểm tra phiên (tải trang) mỗi giờ
+CODEX_FATAL_COOLDOWN = 10 ** 7                  # cooldown codex_auth gắn cho lỗi refresh không cứu được
 
 
 class Keepalive:
@@ -35,6 +36,9 @@ class Keepalive:
         self.store = store
         self.task: asyncio.Task | None = None
         self._validated: dict[str, int] = {}  # connection id -> lần kiểm tra phiên gần nhất
+        # connection id -> refresh token ChatGPT đã bị từ chối hẳn (thu hồi/hết hạn). Không thử lại token đó
+        # mỗi 10 phút; đăng nhập lại (refresh token đổi) thì tự chạy lại.
+        self._dead_refresh: dict[str, str] = {}
 
     def start(self) -> None:
         if self.task is None or self.task.done():
@@ -78,11 +82,19 @@ class Keepalive:
         secret = self.store.connection_secret(c["id"])
         if not secret.get("refresh_token"):
             return
+        if self._dead_refresh.get(c["id"]) == secret["refresh_token"]:
+            return
         last = int(secret.get("refreshed_at") or 0)
         if last and now - last < CODEX_REFRESH_AFTER_MS:
             return
         # ensure_access_token(force=True) đi qua cùng khóa + lưu token mới, an toàn với request song song.
-        await codex_auth.ensure_access_token(self.store, c, force=True)
+        try:
+            await codex_auth.ensure_access_token(self.store, c, force=True)
+        except ProviderError as e:
+            if e.cooldown >= CODEX_FATAL_COOLDOWN:
+                self._dead_refresh[c["id"]] = secret["refresh_token"]
+            raise
+        self._dead_refresh.pop(c["id"], None)
 
     async def _gemini(self, c: dict[str, Any], now: int) -> None:
         secret = self.store.connection_secret(c["id"])
