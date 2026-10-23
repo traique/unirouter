@@ -190,10 +190,26 @@ class Router:
         return conns
 
     # -------------------------------------------------------------- execution
+    @staticmethod
+    def _wants_tools(ctx: CallContext) -> bool:
+        for body in (ctx.body, ctx.responses_body):
+            if body and body.get("tools") and body.get("tool_choice") != "none":
+                return True
+        return False
+
+    # Provider không làm được tool calling đáng tin -> bỏ khỏi "auto" khi request có tools.
+    NO_TOOL_TYPES = {"gemini_web"}
+
     async def open(self, ctx: CallContext, requested: str, allow_default: bool = True) -> Stream:
         # Key bị giới hạn model không được "lách" sang model mặc định
         targets, _ = self.resolve(requested, allow_default=allow_default)
         queue = list(targets)
+        if self._wants_tools(ctx) and len(queue) > 1:
+            # auto/combo: bỏ provider không làm được tool khi còn đích khác. Gọi đích danh (1 đích) thì
+            # giữ nguyên để provider tự báo lỗi rõ ràng.
+            filtered = [t for t in queue if t.provider["type"] not in self.NO_TOOL_TYPES]
+            if filtered:
+                queue = filtered
         attempts: list[dict[str, Any]] = []
         last: ProviderError | None = None
         waits: list[float] = []

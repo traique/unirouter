@@ -88,6 +88,16 @@ PRESETS: list[dict[str, Any]] = [
                 "dán key xong app tự lấy danh sách model, model miễn phí xếp trước.",
     },
     {
+        "id": "gemini-web", "signup_url": "https://gemini.google.com", "alias": "gmw", "name": "Gemini Web (cookie)",
+        "type": "gemini_web", "base_url": "https://gemini.google.com",
+        "models": ["gemini-flash", "gemini-pro", "gemini-thinking", "gemini-auto", "gemini-flash-lite"],
+        "options": {"temporary_chats": True},
+        "note": "Đăng nhập bằng cookie tài khoản gemini.google.com (dán cookie trong trang quản trị). "
+                "Dùng endpoint nội bộ của web app, KHÔNG phải API chính thức: có thể hỏng khi Google đổi "
+                "giao diện, và có rủi ro khóa tài khoản Google. Không hỗ trợ tool calling. Nên dùng tài "
+                "khoản phụ. Cookie được tự xoay để giữ phiên, nhưng thỉnh thoảng vẫn phải dán lại.",
+    },
+    {
         "id": "github", "alias": "gh", "name": "GitHub Models", "type": "openai",
         "base_url": "https://models.github.ai/inference", "models": [],
         "options": {"models_url": "https://models.github.ai/catalog/models",

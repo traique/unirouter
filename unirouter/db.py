@@ -263,8 +263,8 @@ class Store:
         if "/" in alias:
             raise ValueError("alias không được chứa dấu /")
         ptype = data.get("type") or (existing or {}).get("type") or "openai"
-        if ptype not in ("openai", "codex"):
-            raise ValueError("type phải là openai hoặc codex")
+        if ptype not in ("openai", "codex", "gemini_web"):
+            raise ValueError("type phải là openai, codex hoặc gemini_web")
         models = data.get("models", (existing or {}).get("models", []))
         if isinstance(models, str):
             models = [m.strip() for m in models.replace("\n", ",").split(",") if m.strip()]

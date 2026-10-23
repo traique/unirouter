@@ -887,3 +887,213 @@ def test_codex_unsupported_model_effort_suffix_and_explicit_image(env):
         assert st.router._replace_model(stale, ProviderError(400, "x", "model", model="gpt-gone"), "chat") is None
     finally:
         st.store.upsert_provider({"id": "codex", "models": saved_models, "options": saved_opts})
+
+
+# ------------------------------------------------------------------ Gemini Web (cookie)
+def test_gemini_web_chat(env):
+    mock = env["mock"]
+    before_rot = mock.gw_state["rotations"]
+    r = oa(env).chat.completions.create(model="gmw/gemini-web", messages=[{"role": "user", "content": "chào"}])
+    assert r.choices[0].message.content == "Xin chào từ Gemini Web."
+    assert mock.calls["gw-stream"] >= 1
+    assert mock.gw_state["rotations"] > before_rot  # lần đầu đã xoay cookie
+
+
+def test_gemini_web_rotated_cookie_is_saved(env):
+    st = env["st"]
+    oa(env).chat.completions.create(model="gmw/gemini-web", messages=[{"role": "user", "content": "x"}])
+    cid = next(c["id"] for c in st.store.connections.values() if c["label"] == "gw-1")
+    sec = st.store.connection_secret(cid)
+    # cookie mới từ RotateCookies phải được lưu lại (không mất khi restart)
+    assert sec["cookies"].get("__Secure-1PSIDTS", "").startswith("rot-")
+    assert sec["rotated_at"] > 0
+
+
+def test_gemini_web_skipped_for_tools_in_auto(env):
+    """auto: request có tools bỏ qua Gemini Web, dùng provider làm tool được."""
+    st = env["st"]
+    before = env["mock"].calls.get("gw-stream", 0)
+    st.store.upsert_combo({"name": "autotool", "strategy": "priority", "targets": ["gmw/gemini-web", "mk/tool"]})
+    r = oa(env).chat.completions.create(
+        model="autotool", messages=[{"role": "user", "content": "weather"}],
+        tools=[{"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object"}}}])
+    # phải rơi vào mk/tool (gemini-web bị bỏ qua), có tool_call
+    assert r.choices[0].message.tool_calls
+    assert env["mock"].calls.get("gw-stream", 0) == before
+    st.store.delete_combo("autotool")
+
+
+def test_gemini_web_explicit_tool_call_errors_gracefully(env):
+    """Gọi đích danh gmw với tools -> provider báo lỗi, không crash."""
+    with pytest.raises(openai.APIError):
+        oa(env).chat.completions.create(
+            model="gmw/gemini-web", messages=[{"role": "user", "content": "x"}],
+            tools=[{"type": "function", "function": {"name": "f", "parameters": {"type": "object"}}}])
+
+
+def test_gemini_web_bard_error_fallback(env):
+    """BardErrorInfo -> scope target -> fallback sang provider khác trong combo."""
+    st = env["st"]
+    st.store.upsert_combo({"name": "gwfb", "strategy": "priority", "targets": ["gmw/gemini-web", "mk/ok"]})
+    # prompt chứa FAILPROMPT khiến mock trả BardErrorInfo
+    r = oa(env).chat.completions.create(model="gwfb", messages=[{"role": "user", "content": "FAILPROMPT please"}])
+    assert r.choices[0].message.content == "Hello from ok"
+    st.store.delete_combo("gwfb")
+
+
+def test_gemini_web_dead_cookie_reported(env, admin):
+    """Cookie bị /sorry/ (DEADPSID) -> endpoint dán cookie báo lỗi account, không crash."""
+    r = admin.post("/admin/api/gemini-web/cookie",
+                   json={"provider_id": "gemini-web", "cookie": "__Secure-1PSID=DEADPSID", "label": "dead acct"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is False and body["status"] == 401
+    st = env["st"]
+    st.store.delete_connection(body["connection_id"])
+
+
+def test_gemini_web_cookie_paste_endpoint(env, admin):
+    r = admin.post("/admin/api/gemini-web/cookie",
+                   json={"provider_id": "gemini-web", "cookie": "__Secure-1PSID=GOODPSID; SID=y", "label": "test acct"})
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+
+# ------------------------------------------------------------------ Codex PKCE (dán callback)
+def test_codex_pkce_login(env, admin):
+    mock = env["mock"]
+    start = admin.post("/admin/api/codex/pkce/start", json={"provider_id": "codex"})
+    assert start.status_code == 200
+    data = start.json()
+    assert "authorize_url" in data and "code_challenge=" in data["authorize_url"]
+    # lấy state từ authorize_url để dựng callback
+    from urllib.parse import urlparse, parse_qs
+    state = parse_qs(urlparse(data["authorize_url"]).query)["state"][0]
+    cb = f"http://localhost:1455/auth/callback?code=good-code&state={state}"
+    done = admin.post("/admin/api/codex/pkce/complete", json={"login_id": data["login_id"], "callback_url": cb})
+    assert done.status_code == 200, done.text
+    assert done.json()["ok"] is True
+    assert mock.calls.get("pkce_exchange", 0) >= 1
+
+
+def test_codex_pkce_bad_state(env, admin):
+    start = admin.post("/admin/api/codex/pkce/start", json={}).json()
+    cb = "http://localhost:1455/auth/callback?code=good-code&state=WRONG"
+    r = admin.post("/admin/api/codex/pkce/complete", json={"login_id": start["login_id"], "callback_url": cb})
+    assert r.status_code == 400
+
+
+def test_gemini_web_model_mode_in_payload(env):
+    """gemini-pro phải gửi mode 3 (inner[79]) cho web app."""
+    import json as _json
+    from urllib.parse import parse_qs
+    st = env["st"]
+    st.store.upsert_provider({"id": "gemini-web", "models": ["gemini-flash", "gemini-pro", "gemini-web"]})
+    oa(env).chat.completions.create(model="gmw/gemini-pro", messages=[{"role": "user", "content": "x"}])
+    freq = parse_qs(env["mock"].last_body["gw-stream"])["f.req"][0]
+    inner = _json.loads(_json.loads(freq)[1])
+    assert inner[79] == 3 and inner[41] == [1]  # Pro + chat tạm
+
+
+def test_gemini_web_unknown_model_is_request_error(env):
+    st = env["st"]
+    st.store.upsert_provider({"id": "gemini-web", "models": ["gemini-flash", "gemini-web", "gemini-ultra-x"]})
+    with pytest.raises(openai.BadRequestError):
+        oa(env).chat.completions.create(model="gmw/gemini-ultra-x", messages=[{"role": "user", "content": "x"}])
+
+
+def test_gemini_rich_markup_to_markdown():
+    from unirouter.providers.gemini_web import clean_text
+    raw = ('Hi\n<Section title="Greeting">\n<TextBox subtext="sin chow" text="Xin chào">\n</TextBox>\n</Section>\n'
+           '<Elicitations message="More:">\n  <Elicitation label="a" query="a"/>\n</Elicitations>')
+    out = clean_text(raw)
+    assert "### Greeting" in out and "**Xin chào** (sin chow)" in out
+    assert "Elicitation" not in out and "<" not in out
+
+
+def test_keepalive_rotates_gemini_and_skips_fresh_codex(env):
+    import asyncio
+    from unirouter.keepalive import Keepalive
+    from unirouter.providers import codex_auth as ca
+    from unirouter.providers import gemini_web_auth as gwa
+    st, mock = env["st"], env["mock"]
+    ka = Keepalive(st.store)
+
+    def fresh_clients():  # asyncio.run tạo loop mới; session/khóa của loop server không dùng chéo được
+        gwa._session, ca._session = None, None
+        gwa._locks.clear()
+        ca._locks.clear()
+
+    fresh_clients()
+    rot_before, refresh_before = mock.gw_state["rotations"], mock.calls.get("refresh", 0)
+    asyncio.run(ka._run_once())
+    assert mock.gw_state["rotations"] > rot_before          # Gemini: đã xoay
+    assert mock.calls.get("refresh", 0) == refresh_before   # Codex vừa refresh gần đây -> không đụng
+    # Lượt kế tiếp ngay sau đó: không xoay lại (chưa tới hạn 9 phút), không tải trang lại
+    rot_mid = mock.gw_state["rotations"]
+    fresh_clients()
+    asyncio.run(ka._run_once())
+    assert mock.gw_state["rotations"] == rot_mid
+    fresh_clients()
+
+
+def test_gemini_web_cookie_update_chosen_account(env, admin):
+    """'Dán cookie mới' cho tài khoản đã chọn -> cập nhật đúng tài khoản đó, không tạo bản mới."""
+    st = env["st"]
+    cid = next(c["id"] for c in st.store.connections.values() if c["label"] == "gw-1")
+    n_before = len(st.store.provider_connections("gemini-web"))
+    r = admin.post("/admin/api/gemini-web/cookie", json={"provider_id": "gemini-web", "connection_id": cid,
+                                                         "cookie": "__Secure-1PSID=GOODPSID-NEWLOGIN; SID=z"})
+    assert r.status_code == 200 and r.json()["connection_id"] == cid
+    assert len(st.store.provider_connections("gemini-web")) == n_before
+    assert st.store.connection_secret(cid)["cookies"]["__Secure-1PSID"] == "GOODPSID-NEWLOGIN"
+    assert st.store.connections[cid]["label"] == "gw-1"
+
+
+def test_gemini_web_streams_deltas(env):
+    """Stream: phát phần mới thêm, ghép lại đúng câu trả lời; thẻ giao diện được đổi sang Markdown."""
+    chunks = [c.choices[0].delta.content or "" for c in oa(env).chat.completions.create(
+        model="gmw/gemini-web", messages=[{"role": "user", "content": "RICH please"}], stream=True)]
+    parts = [c for c in chunks if c]
+    assert len(parts) >= 2
+    assert "".join(chunks) == "Hi\n### Greeting\nXin chào"
+
+
+def test_gemini_web_self_heals_when_page_token_changes(env):
+    """Token trang (at) đổi phía Google -> request đầu bị 400 -> tự tải lại trang và gửi lại, client vẫn OK."""
+    mock, st = env["mock"], env["st"]
+    # chỉ giữ một tài khoản Gemini để đếm số lần tải trang cho chính xác
+    others = [c["id"] for c in st.store.provider_connections("gemini-web") if c["label"] != "gw-1" and c["enabled"]]
+    for cid in others:
+        st.store.update_connection(cid, {"enabled": False})
+    oa(env).chat.completions.create(model="gmw/gemini-web", messages=[{"role": "user", "content": "x"}])
+    mock.gw_state["at"] = "xsrf-tok-NEW"
+    stale_before, app_before = mock.calls.get("gw-stale", 0), mock.calls.get("gw-app", 0)
+    r = oa(env).chat.completions.create(model="gmw/gemini-web", messages=[{"role": "user", "content": "x"}])
+    assert r.choices[0].message.content == "Xin chào từ Gemini Web."
+    assert mock.calls.get("gw-stale", 0) == stale_before + 1   # đúng một lần bị từ chối
+    assert mock.calls.get("gw-app", 0) == app_before + 1       # tải lại trang đúng một lần
+    # request kế tiếp dùng token đã cache: không tải trang nữa
+    oa(env).chat.completions.create(model="gmw/gemini-web", messages=[{"role": "user", "content": "y"}])
+    assert mock.calls.get("gw-app", 0) == app_before + 1
+    for cid in others:
+        st.store.update_connection(cid, {"enabled": True})
+
+
+def test_gemini_web_cookies_not_shared_between_accounts(env):
+    """Cookie Set-Cookie của tài khoản A không được gửi kèm request của tài khoản B."""
+    st = env["st"]
+    st.store.add_connection("gemini-web", "gw-2", {"cookies": {"__Secure-1PSID": "OTHERPSID"}, "rotated_at": 0}, {"cookie_fp": "OTHER"})
+    c2 = next(c for c in st.store.connections.values() if c["label"] == "gw-2")
+    try:
+        import asyncio
+        from unirouter.providers import gemini_web_auth as gwa
+        gwa._session = None; gwa._locks.clear()
+        sess = asyncio.run(gwa.ensure_session(st.store, c2, None, force_rotate=True, refresh_page=True))
+        assert sess["cookies"]["__Secure-1PSID"] == "OTHERPSID"
+        # cookie xoay của gw-2 nằm trong secret của gw-2, không rò sang gw-1
+        c1 = next(c for c in st.store.connections.values() if c["label"] == "gw-1")
+        assert st.store.connection_secret(c1["id"])["cookies"]["__Secure-1PSID"] != "OTHERPSID"
+        gwa._session = None; gwa._locks.clear()
+    finally:
+        st.store.delete_connection(c2["id"])
