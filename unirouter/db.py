@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS api_keys (
     key_hash TEXT NOT NULL UNIQUE,
     prefix TEXT NOT NULL,
     allowed_models TEXT,
+    providers TEXT,
+    provider_mode TEXT NOT NULL DEFAULT 'only',
     rpm INTEGER NOT NULL DEFAULT 0,
     enabled INTEGER NOT NULL DEFAULT 1,
     last_used_at INTEGER,
@@ -149,6 +151,11 @@ class Store:
         cols = {r[1] for r in self.conn.execute("PRAGMA table_info(usage)")}
         if "key_id" not in cols:  # nâng cấp DB cũ
             self.conn.execute("ALTER TABLE usage ADD COLUMN key_id TEXT")
+        key_cols = {r[1] for r in self.conn.execute("PRAGMA table_info(api_keys)")}
+        if "providers" not in key_cols:
+            self.conn.execute("ALTER TABLE api_keys ADD COLUMN providers TEXT")
+        if "provider_mode" not in key_cols:
+            self.conn.execute("ALTER TABLE api_keys ADD COLUMN provider_mode TEXT NOT NULL DEFAULT 'only'")
         self.crypto = Crypto(config.FERNET_KEY)
         self._seed()
         self.reload()
@@ -233,6 +240,7 @@ class Store:
             for r in self.q("SELECT * FROM api_keys"):
                 k = dict(r)
                 k["allowed_models"] = json.loads(k["allowed_models"]) if k["allowed_models"] else None
+                k["providers"] = json.loads(k["providers"]) if k["providers"] else None
                 k["enabled"] = bool(k["enabled"])
                 self.keys[k["key_hash"]] = k
 
@@ -383,11 +391,33 @@ class Store:
         self.reload()
 
     # ------------------------------------------------------------------- keys
-    def create_key(self, name: str, allowed_models: list[str] | None, rpm: int) -> str:
+    def _key_providers(self, providers: Any, mode: Any, existing: list[str] | None = None) -> tuple[str | None, str]:
+        """Chuẩn hóa danh sách nguồn (theo thứ tự ưu tiên) và chế độ của một API key.
+
+        Nguồn đã lưu trước đó mà nay bị xóa vẫn được giữ: key "only" khi đó bị từ chối thay vì âm thầm mở rộng.
+        """
+        if isinstance(providers, str):
+            providers = [p.strip() for p in providers.replace("\n", ",").split(",") if p.strip()]
+        out: list[str] = []
+        for pid in providers or []:
+            pid = str(pid)
+            if pid not in self.providers and pid not in (existing or []):
+                raise ValueError(f"Không có nguồn '{pid}'")
+            if pid not in out:
+                out.append(pid)
+        mode = str(mode or "only")
+        if mode not in ("only", "prefer"):
+            raise ValueError("provider_mode phải là only hoặc prefer")
+        return (json.dumps(out) if out else None), mode
+
+    def create_key(self, name: str, allowed_models: list[str] | None, rpm: int,
+                   providers: list[str] | None = None, provider_mode: str = "only") -> str:
+        prov, mode = self._key_providers(providers, provider_mode)
         raw = "sk-uni-" + secrets.token_urlsafe(32)
-        self.x("INSERT INTO api_keys (id,name,key_hash,prefix,allowed_models,rpm,enabled,created_at) VALUES (?,?,?,?,?,?,1,?)",
+        self.x("INSERT INTO api_keys (id,name,key_hash,prefix,allowed_models,providers,provider_mode,rpm,enabled,created_at)"
+               " VALUES (?,?,?,?,?,?,?,?,1,?)",
                (uuid.uuid4().hex[:12], name[:100], hash_key(raw), raw[:14], json.dumps(allowed_models) if allowed_models else None,
-                max(0, int(rpm)), now_ms()))
+                prov, mode, max(0, int(rpm)), now_ms()))
         self.reload()
         return raw
 
@@ -398,8 +428,10 @@ class Store:
         allowed = data.get("allowed_models", row["allowed_models"])
         if isinstance(allowed, str):
             allowed = [m.strip() for m in allowed.split(",") if m.strip()] or None
-        self.x("UPDATE api_keys SET name=?, allowed_models=?, rpm=?, enabled=? WHERE id=?",
-               (str(data.get("name", row["name"]))[:100], json.dumps(allowed) if allowed else None,
+        prov, mode = self._key_providers(data.get("providers", row["providers"]),
+                                         data.get("provider_mode", row["provider_mode"]), row["providers"])
+        self.x("UPDATE api_keys SET name=?, allowed_models=?, providers=?, provider_mode=?, rpm=?, enabled=? WHERE id=?",
+               (str(data.get("name", row["name"]))[:100], json.dumps(allowed) if allowed else None, prov, mode,
                 max(0, int(data.get("rpm", row["rpm"]))), 1 if data.get("enabled", row["enabled"]) else 0, kid))
         self.reload()
 

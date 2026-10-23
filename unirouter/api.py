@@ -125,7 +125,7 @@ async def handle(request: Request, fmt: str, chat: dict[str, Any], requested: st
     ctx = CallContext(chat, stream, fmt, responses_body)
     t0 = time.monotonic()
     log = {"key_name": key["name"], "key_id": key["id"], "endpoint": fmt, "requested_model": requested, "rtk_saved": rtk_saved}
-    task = asyncio.create_task(st.router.open(ctx, requested, allow_default=not key.get("allowed_models")))
+    task = asyncio.create_task(st.router.open(ctx, requested, allow_default=not key.get("allowed_models"), key=key))
     done, _ = await asyncio.wait({task}, timeout=EARLY_WAIT if stream else None)
 
     if task in done and task.exception() is not None:
@@ -313,7 +313,7 @@ async def unary(request: Request, kind: str, body: dict[str, Any], key: dict[str
     t0 = time.monotonic()
     try:
         data, target, conn, attempts, _ = await st.router.call(kind, requested, body,
-                                                               allow_default=not key.get("allowed_models"))
+                                                               allow_default=not key.get("allowed_models"), key=key)
     except Exception as e:  # noqa: BLE001
         return failure_response(st, "chat", e, log, t0)
     usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
@@ -399,6 +399,8 @@ async def models(request: Request):
             data.append({"id": c["name"], "object": "model", "created": created, "owned_by": "combo"})
     for p in st.store.providers.values():
         if not p["enabled"] or not any(c["enabled"] for c in st.store.provider_connections(p["id"])):
+            continue
+        if not st.router.key_provider_ok(key, p["id"]):
             continue
         extra = [m for m in (st.router.kind_model(p, "embeddings"), st.router.kind_model(p, "images"))
                  if m and m not in p["models"]]

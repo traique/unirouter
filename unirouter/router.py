@@ -175,6 +175,29 @@ class Router:
             return sorted(targets, key=lambda t: self.health.latency(t.key))
         return targets
 
+    def for_key(self, targets: list[Target], key: dict[str, Any] | None) -> list[Target]:
+        """Áp nguồn trả lời của API key: "only" = chỉ các nguồn đã chọn, "prefer" = các nguồn đó thử trước.
+
+        Thứ tự trong danh sách của key là thứ tự ưu tiên; trong cùng một nguồn giữ nguyên thứ tự gốc.
+        """
+        pids = (key or {}).get("providers")
+        if not pids:
+            return targets
+        rank = {pid: i for i, pid in enumerate(pids)}
+        picked = sorted((t for t in targets if t.provider["id"] in rank), key=lambda t: rank[t.provider["id"]])
+        if (key or {}).get("provider_mode") == "prefer":
+            return picked + [t for t in targets if t.provider["id"] not in rank]
+        if not picked and targets:
+            names = ", ".join(self.store.providers[p]["name"] for p in pids if p in self.store.providers) or "(không còn)"
+            raise GatewayError(403, f"API key này chỉ được dùng nguồn: {names}. Model yêu cầu không thuộc các nguồn "
+                                    f"này hoặc các nguồn đó chưa có tài khoản.")
+        return picked
+
+    def key_provider_ok(self, key: dict[str, Any] | None, pid: str) -> bool:
+        """Key ở chế độ "only" có thấy nguồn này không (dùng cho /v1/models)."""
+        pids = (key or {}).get("providers")
+        return not pids or (key or {}).get("provider_mode") == "prefer" or pid in pids
+
     def allowed(self, key: dict[str, Any] | None, requested: str) -> bool:
         if not key or not key.get("allowed_models"):
             return True
@@ -200,10 +223,11 @@ class Router:
     # Provider không làm được tool calling đáng tin -> bỏ khỏi "auto" khi request có tools.
     NO_TOOL_TYPES = {"gemini_web"}
 
-    async def open(self, ctx: CallContext, requested: str, allow_default: bool = True) -> Stream:
+    async def open(self, ctx: CallContext, requested: str, allow_default: bool = True,
+                   key: dict[str, Any] | None = None) -> Stream:
         # Key bị giới hạn model không được "lách" sang model mặc định
         targets, _ = self.resolve(requested, allow_default=allow_default)
-        queue = list(targets)
+        queue = self.for_key(list(targets), key)
         if self._wants_tools(ctx) and len(queue) > 1:
             # auto/combo: bỏ provider không làm được tool khi còn đích khác. Gọi đích danh (1 đích) thì
             # giữ nguyên để provider tự báo lỗi rõ ràng.
@@ -285,10 +309,11 @@ class Router:
         raise GatewayError(status, msg, attempts)
 
     async def call(self, kind: str, requested: str, body: dict[str, Any],
-                   allow_default: bool = True) -> tuple[dict[str, Any], Target, dict[str, Any], list[dict[str, Any]], int]:
+                   allow_default: bool = True, key: dict[str, Any] | None = None,
+                   ) -> tuple[dict[str, Any], Target, dict[str, Any], list[dict[str, Any]], int]:
         """Gọi endpoint một lần (embeddings / tạo ảnh) với cùng cơ chế chọn đích, xoay tài khoản và fallback."""
         targets, _ = self.resolve(requested, allow_default=allow_default, kind=kind)
-        queue = list(targets)
+        queue = self.for_key(list(targets), key)
         attempts: list[dict[str, Any]] = []
         last: ProviderError | None = None
         waits: list[float] = []

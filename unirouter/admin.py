@@ -741,7 +741,11 @@ async def create_key(request: Request):
     allowed = data.get("allowed_models")
     if isinstance(allowed, str):
         allowed = [m.strip() for m in allowed.split(",") if m.strip()] or None
-    raw = S(request).store.create_key(str(data.get("name") or "client"), allowed, int(data.get("rpm") or 0))
+    try:
+        raw = S(request).store.create_key(str(data.get("name") or "client"), allowed, int(data.get("rpm") or 0),
+                                          data.get("providers"), data.get("provider_mode") or "only")
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
     return {"ok": True, "key": raw}
 
 
@@ -752,6 +756,8 @@ async def update_key(kid: str, request: Request):
         S(request).store.update_key(kid, await request.json())
     except KeyError as e:
         raise HTTPException(404, "Không có key này") from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
     return {"ok": True}
 
 
