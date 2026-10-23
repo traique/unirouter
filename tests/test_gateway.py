@@ -1037,6 +1037,36 @@ def test_keepalive_rotates_gemini_and_skips_fresh_codex(env):
     fresh_clients()
 
 
+def test_keepalive_stops_retrying_revoked_codex_refresh(monkeypatch):
+    """Refresh token ChatGPT bị thu hồi -> keepalive không gọi lại mỗi 10 phút; đăng nhập lại thì chạy tiếp."""
+    import asyncio
+    from unirouter import keepalive as kmod
+    from unirouter.providers.base import ProviderError
+
+    secret = {"refresh_token": "rt-old", "refreshed_at": 0}
+    calls = []
+
+    class FakeStore:
+        def connection_secret(self, cid):
+            return secret
+
+    async def fake_ensure(store, c, force=False):
+        calls.append(secret["refresh_token"])
+        if secret["refresh_token"] == "rt-old":
+            raise ProviderError(401, "invalid_grant", "account", 10**7)
+
+    monkeypatch.setattr(kmod.codex_auth, "ensure_access_token", fake_ensure)
+    ka = kmod.Keepalive(FakeStore())
+    c = {"id": "c1", "label": "x"}
+    for _ in range(3):
+        with pytest.raises(ProviderError) if not calls else contextlib.nullcontext():
+            asyncio.run(ka._codex(c, 10**13))
+    assert calls == ["rt-old"]
+    secret["refresh_token"] = "rt-new"  # đăng nhập lại
+    asyncio.run(ka._codex(c, 10**13))
+    assert calls == ["rt-old", "rt-new"] and "c1" not in ka._dead_refresh
+
+
 def test_gemini_web_cookie_update_chosen_account(env, admin):
     """'Dán cookie mới' cho tài khoản đã chọn -> cập nhật đúng tài khoản đó, không tạo bản mới."""
     st = env["st"]
