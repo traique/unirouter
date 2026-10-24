@@ -672,7 +672,7 @@ const loadOverview = loader("#board", async () => {
       <div class="board-legend"><span><i style="background:var(--ok)"></i>Khỏe</span><span><i style="background:var(--warn)"></i>Tạm khóa, tự mở lại</span><span><i style="background:var(--bad)"></i>Lỗi, cần xử lý</span><span><i style="border:1.5px dashed var(--off)"></i>Đã tắt</span></div>
       ${broken.length ? `<div class="fix-list">${broken.map(c => `<div class="fix"><span class="lamp ${c.health}" style="margin-top:7px"></span>
         <div class="grow"><div><b>${esc(c.label)}</b> <span class="muted">· ${esc(c.p.name)}${c.health === "cooldown" ? " · mở lại sau " + dur(c.blocked_for) : ""}</span></div>
-        <div>${esc(c.block_reason || c.last_error || "")}${c.session?.died ? ` Cookie sống được ${lifeOf(c.session).text}, chết lúc ${when(c.session.died)}.` : ""}</div></div><div class="acct-acts">${fixButtons(c)}</div></div>`).join("")}</div>` : ""}`;
+        <div>${esc(c.block_reason || c.last_error || "")}${c.session?.died ? (lifeOf(c.session) ? ` Cookie sống được ${lifeOf(c.session).text}, chết lúc ${when(c.session.died)}.` : ` Cookie chết lúc ${when(c.session.died)}.`) : ""}</div></div><div class="acct-acts">${fixButtons(c)}</div></div>`).join("")}</div>` : ""}`;
   }
 
   const t = d.stats.total, okp = t.n ? Math.round(100 * (t.ok || 0) / t.n) : null;
