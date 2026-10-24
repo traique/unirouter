@@ -346,6 +346,14 @@ class Store:
             self.x("UPDATE connections SET last_error=NULL WHERE id=?", (cid,))
         self.reload()
 
+    def update_connection_meta(self, cid: str, meta: dict[str, Any]) -> None:
+        with self.lock:
+            c = self.connections.get(cid)
+            if not c:
+                return
+            self.x("UPDATE connections SET meta=? WHERE id=?", (json.dumps(meta), cid))
+            c["meta"] = meta
+
     def set_connection_error(self, cid: str, error: str | None) -> None:
         c = self.connections.get(cid)
         if not c or c.get("last_error") == error:

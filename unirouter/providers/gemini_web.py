@@ -271,6 +271,7 @@ class GeminiWebProvider(Provider):
         elif not emitted:
             yield {"type": "text", "text": text}
         # (đã phát một phần mà bản cuối lại khác hẳn: giữ bản đã phát, không ghép hai bản)
+        gw.mark_alive(self.store, connection["id"])
         yield {"type": "usage", "input": len(prompt) // 4, "output": len(text) // 4, "cached": 0}
         yield {"type": "finish", "reason": "stop"}
 

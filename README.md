@@ -189,6 +189,9 @@ Provider Gemini Web dùng endpoint nội bộ của gemini.google.com, **không 
 - Tài khoản miễn phí vẫn có hạn mức theo ngày cho Pro và chế độ thinking; khi chạm hạn mức, `auto` và combo tự chuyển nguồn.
 - Không hỗ trợ tool calling, tạo ảnh và embeddings qua nguồn này.
 - Nhiều tài khoản Gemini dùng được cùng lúc: cookie của từng tài khoản được gửi riêng, không lẫn sang nhau.
+- Khi xoay cookie, UniRouter chỉ nhận các cookie phiên (`*PSIDTS`, `*PSIDCC`, `SIDCC`) và bỏ qua cookie Google gửi để xóa. Nếu phiên vẫn bị đăng xuất, UniRouter thử lại bộ cookie chạy tốt gần nhất trước khi báo lỗi. Phiên đã lỗi thì ngừng xoay, chỉ kiểm tra lại mỗi giờ.
+- **Đo tuổi thọ cookie:** mỗi lần dán cookie, UniRouter ghi lúc dán, lần cuối cookie còn chạy và lúc phát hiện chết (sai lệch khoảng 10 phút: khi Google từ chối xoay cookie, UniRouter kiểm tra phiên ngay). Mỗi tài khoản có nút **Lịch sử cookie** với tuổi thọ trung bình, ngắn nhất, dài nhất của 20 cookie gần nhất, kể cả khi bạn để `auto` chuyển sang nguồn khác và lâu không vào xem.
+- Thông báo lỗi phân biệt: Google đăng xuất phiên (cần dán cookie mới), Google bắt xác minh vì IP (đặt `GEMINI_WEB_PROXY`), và trang Gemini đổi giao diện (cần cập nhật UniRouter).
 
 ## Phát triển
 

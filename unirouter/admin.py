@@ -149,6 +149,11 @@ def connection_view(st, c: dict[str, Any]) -> dict[str, Any]:
     if "cookies" in secret:
         view["cookie_fp"] = (c.get("meta") or {}).get("cookie_fp") or "set"
         view["rotated_at"] = secret.get("rotated_at")
+        meta = c.get("meta") or {}
+        if meta.get("session"):
+            view["session"] = meta["session"]
+        if meta.get("history"):
+            view["history"] = meta["history"]
     if not c["enabled"]:
         view["health"] = "disabled"
     elif wait:
@@ -661,14 +666,14 @@ async def gemini_web_cookie(request: Request):
         if c["id"] == target_id or (not target_id and (c.get("meta") or {}).get("cookie_fp") == meta.get("cookie_fp")):
             if str(data.get("label") or "").strip():
                 st.store.update_connection(c["id"], {"label": str(data["label"]).strip()[:100]})
-            st.store.update_connection_secret(c["id"], secret, {**c["meta"], **meta})
+            st.store.update_connection_secret(c["id"], secret, gemini_web_auth.new_session_meta({**c["meta"], **meta}))
             st.store.update_connection(c["id"], {"enabled": True})
             st.health.reset(c["id"])
             cid = c["id"]
             break
     else:
         label = str(data.get("label") or "").strip() or f"Gemini {time.strftime('%d/%m %H:%M')}"
-        cid = st.store.add_connection(pid, label, secret, meta)["id"]
+        cid = st.store.add_connection(pid, label, secret, gemini_web_auth.new_session_meta(meta))["id"]
     # Kiểm tra cookie sống + xoay lần đầu ngay, báo lỗi rõ nếu Google từ chối.
     try:
         gemini_web_auth.invalidate(cid)

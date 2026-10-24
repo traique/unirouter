@@ -1129,6 +1129,123 @@ def test_gemini_web_cookies_not_shared_between_accounts(env):
         st.store.delete_connection(c2["id"])
 
 
+def test_gemini_rotation_ignores_deletions_and_foreign_cookies():
+    """Xoay cookie chỉ ghi các cookie *PSIDTS/*PSIDCC; cookie xóa hoặc của accounts.google.com bị bỏ qua."""
+    from unirouter.providers.gemini_web_auth import _merge_set_cookie
+
+    class H:
+        def get_list(self, _):
+            return ["__Secure-1PSID=EXPIRED; Max-Age=0; Path=/",
+                    "__Secure-3PSIDTS=old; Expires=Mon, 01 Jan 1990 00:00:00 GMT",
+                    "__Host-GAPS=x; Path=/",
+                    "__Secure-1PSIDTS=sidts-NEW; Domain=.google.com; Path=/; Secure"]
+
+    class R:
+        headers = H()
+
+    cookies = {"__Secure-1PSID": "keep", "__Secure-3PSIDTS": "keep3", "__Secure-1PSIDTS": "old1"}
+    assert _merge_set_cookie(cookies, R()) is True
+    assert cookies == {"__Secure-1PSID": "keep", "__Secure-3PSIDTS": "keep3", "__Secure-1PSIDTS": "sidts-NEW"}
+
+
+def test_gemini_restores_last_good_cookies_after_bad_rotation(env):
+    """Một lần xoay làm phiên bị đăng xuất -> tự quay về bộ cookie chạy tốt gần nhất, client vẫn được trả lời."""
+    st, mock = env["st"], env["mock"]
+    c = next(x for x in st.store.connections.values() if x["label"] == "gw-1")
+    others = [x["id"] for x in st.store.provider_connections("gemini-web") if x["id"] != c["id"] and x["enabled"]]
+    for cid in others:
+        st.store.update_connection(cid, {"enabled": False})
+    try:
+        oa(env).chat.completions.create(model="gmw/gemini-web", messages=[{"role": "user", "content": "x"}])
+        good = st.store.connection_secret(c["id"])["cookies_good"]
+        assert good["__Secure-1PSID"] == st.store.connection_secret(c["id"])["cookies"]["__Secure-1PSID"]
+        # lần xoay kế tiếp "xấu", và token trang hết hạn nên phải tải lại trang
+        mock.gw_state["poison_rotate"] = True
+        sec = st.store.connection_secret(c["id"])
+        st.store.update_connection_secret(c["id"], {**sec, "rotated_at": 0})
+        from unirouter.providers import gemini_web_auth as gwa
+        gwa.invalidate(c["id"])
+        rot_before, app_before = mock.gw_state["rotations"], mock.calls.get("gw-app", 0)
+        r = oa(env).chat.completions.create(model="gmw/gemini-web", messages=[{"role": "user", "content": "x"}])
+        assert r.choices[0].message.content == "Xin chào từ Gemini Web."
+        assert mock.gw_state["rotations"] > rot_before            # lần xoay "xấu" thật sự đã chạy
+        assert mock.calls.get("gw-app", 0) >= app_before + 2      # trang bị đăng xuất, rồi thử bộ cookie tốt
+        now = st.store.connection_secret(c["id"])["cookies"]
+        assert now == good                         # đã khôi phục đúng bộ tốt
+        assert now["__Secure-1PSID"] != "EXPIRED"  # cookie xóa không bao giờ được ghi
+        assert not st.store.connections[c["id"]].get("last_error")
+    finally:
+        mock.gw_state["poison_rotate"] = False
+        for cid in others:
+            st.store.update_connection(cid, {"enabled": True})
+
+
+def test_gemini_signed_out_message_is_specific(env, admin):
+    r = admin.post("/admin/api/gemini-web/cookie", json={"provider_id": "gemini-web", "cookie": "SID=only"})
+    assert r.status_code == 400  # thiếu __Secure-1PSID: từ chối ngay
+    mock = env["mock"]
+    mock.gw_state["cookie_dead"] = True
+    try:
+        r = admin.post("/admin/api/gemini-web/cookie",
+                       json={"provider_id": "gemini-web", "cookie": "__Secure-1PSID=SIGNEDOUT; SID=a", "label": "so"})
+        assert r.status_code == 200 and r.json()["ok"] is False
+        assert "đăng xuất" in r.json()["error"]
+    finally:
+        mock.gw_state["cookie_dead"] = False
+        st = env["st"]
+        for c in list(st.store.provider_connections("gemini-web")):
+            if c["label"] == "so":
+                st.store.delete_connection(c["id"])
+
+
+def test_gemini_cookie_lifetime_is_recorded(env, admin):
+    """Dán cookie -> bắt đầu đo; còn chạy -> ghi mốc; Google từ chối xoay -> kiểm tra ngay, ghi lúc chết;
+    dán cookie mới -> phiên cũ vào lịch sử với tuổi thọ."""
+    import asyncio
+    from unirouter.keepalive import Keepalive
+    from unirouter.providers import gemini_web_auth as gwa
+    st, mock = env["st"], env["mock"]
+    r = admin.post("/admin/api/gemini-web/cookie",
+                   json={"provider_id": "gemini-web", "cookie": "__Secure-1PSID=LIFE1; SID=a", "label": "life"})
+    cid = r.json()["connection_id"]
+    try:
+        sess = st.store.connections[cid]["meta"]["session"]
+        assert sess["started"] and sess["last_ok"] and not sess["died"]
+
+        # 2 ngày sau: Google đăng xuất phiên. Keepalive xoay -> bị từ chối -> kiểm tra ngay -> ghi lúc chết.
+        sec = st.store.connection_secret(cid)
+        st.store.update_connection_secret(cid, {**sec, "rotated_at": 0})
+        meta = st.store.connections[cid]["meta"]
+        meta["session"]["started"] -= 2 * 86400 * 1000
+        st.store.update_connection_meta(cid, meta)
+        mock.gw_state["cookie_dead"] = True
+        ka = Keepalive(st.store)
+        ka._validated[cid] = 10 ** 15  # chưa tới lượt kiểm tra mỗi giờ: phải nhờ tín hiệu xoay thất bại
+        gwa._session = None; gwa._locks.clear()
+        asyncio.run(ka._gemini(st.store.connections[cid], gwa._now()))
+    except Exception as e:  # keepalive báo lỗi qua ProviderError là đúng
+        assert "đăng xuất" in str(e)
+    finally:
+        mock.gw_state["cookie_dead"] = False
+        gwa._session = None; gwa._locks.clear()
+    try:
+        sess = st.store.connections[cid]["meta"]["session"]
+        assert sess["died"] and sess["reason"] == "signed_out"
+        assert sess["died"] - sess["started"] >= 2 * 86400 * 1000
+
+        view = next(c for p in admin.get("/admin/api/providers").json()["data"] for c in p["connections"] if c["id"] == cid)
+        assert view["session"]["died"] == sess["died"]
+
+        # Dán cookie mới: phiên cũ vào lịch sử, phiên mới bắt đầu đo lại
+        admin.post("/admin/api/gemini-web/cookie", json={"provider_id": "gemini-web", "connection_id": cid,
+                                                         "cookie": "__Secure-1PSID=LIFE2; SID=b"})
+        meta = st.store.connections[cid]["meta"]
+        assert meta["history"][0]["end"] == "died" and meta["history"][0]["died"] == sess["died"]
+        assert not meta["session"]["died"] and meta["session"]["last_ok"]
+    finally:
+        st.store.delete_connection(cid)
+
+
 # ------------------------------------------------------------------ nguồn trả lời theo API key
 def test_key_provider_order_and_only(env):
     st = env["st"]

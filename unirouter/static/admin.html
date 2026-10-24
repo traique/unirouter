@@ -237,6 +237,14 @@ tbody tr:hover td { background: var(--sunk); }
 .acct:last-child { border-bottom: 0; }
 .acct .lamp { margin-top: 7px; }
 .acct-meta { font-size: 12.5px; color: var(--ink-3); margin-top: 1px; overflow-wrap: anywhere; }
+.life { display: flex; gap: 6px; align-items: flex-start; margin-top: 6px; font-size: 12.5px; color: var(--ink-2); }
+.life .i { width: 14px; height: 14px; margin-top: 2px; color: var(--ok); }
+.life.dead .i { color: var(--bad); }
+.stats3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line-2); border-radius: var(--r-m); margin-bottom: 14px; }
+.stats3 > div { padding: 10px 12px; border-left: 1px solid var(--line-2); }
+.stats3 > div:first-child { border-left: 0; }
+.stats3 small { display: block; color: var(--ink-3); font-size: 12px; }
+.stats3 b { font-size: 15px; font-variant-numeric: tabular-nums; }
 .acct-err { margin-top: 6px; font-size: 12.5px; color: var(--bad); overflow-wrap: anywhere; }
 .acct-warn { margin-top: 6px; font-size: 12.5px; color: var(--warn); }
 .acct-acts { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
@@ -499,7 +507,22 @@ const ago = ms => { if (!ms) return "chưa dùng"; const s = (Date.now() - ms) /
   if (s < 60) return "vừa xong"; if (s < 3600) return Math.floor(s / 60) + " phút trước";
   if (s < 86400) return Math.floor(s / 3600) + " giờ trước"; return Math.floor(s / 86400) + " ngày trước"; };
 const dur = s => s < 60 ? s + " giây" : s < 3600 ? Math.ceil(s / 60) + " phút" : (s / 3600).toFixed(1).replace(".", ",") + " giờ";
-const when = ms => new Date(ms).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+// Khoảng thời gian dài (tuổi thọ cookie): "3 ngày 4 giờ", "5 giờ 20 phút", "12 phút"
+const span = ms => { if (ms == null || ms < 0) return "–"; const m = Math.round(ms / 60000);
+  if (m < 60) return Math.max(m, 1) + " phút"; const h = Math.floor(m / 60);
+  if (h < 24) return h + " giờ" + (m % 60 ? " " + (m % 60) + " phút" : "");
+  return Math.floor(h / 24) + " ngày" + (h % 24 ? " " + (h % 24) + " giờ" : ""); };
+const DEATH = { signed_out: "Google đăng xuất phiên", verify: "Google bắt xác minh vì IP" };
+// Tuổi thọ một phiên cookie: chết thì đo tới lúc phát hiện chết, còn sống thì đo tới bây giờ.
+function lifeOf(sess) {
+  if (!sess || !sess.started) return null;
+  const end = sess.died || sess.ended || (sess.end === "replaced" ? sess.last_ok : null) || Date.now();
+  const min = sess.approx || (sess.end === "replaced" && !sess.ended) ? "ít nhất " : "";
+  return { ms: end - sess.started, text: min + span(end - sess.started),
+    gap: sess.died && sess.last_ok ? sess.died - sess.last_ok : null };
+}
+const pad2 = n => String(n).padStart(2, "0");
+const when = ms => { const d = new Date(ms); return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
 const icon = id => `<svg class="i"><use href="#i-${id}"/></svg>`;
 const empty = (msg, ic = "inbox") => `<div class="empty">${icon(ic)}<div>${msg}</div></div>`;
 const initials = n => String(n).replace(/[^A-Za-z0-9 ]/g, " ").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase() || "?";
@@ -649,7 +672,7 @@ const loadOverview = loader("#board", async () => {
       <div class="board-legend"><span><i style="background:var(--ok)"></i>Khỏe</span><span><i style="background:var(--warn)"></i>Tạm khóa, tự mở lại</span><span><i style="background:var(--bad)"></i>Lỗi, cần xử lý</span><span><i style="border:1.5px dashed var(--off)"></i>Đã tắt</span></div>
       ${broken.length ? `<div class="fix-list">${broken.map(c => `<div class="fix"><span class="lamp ${c.health}" style="margin-top:7px"></span>
         <div class="grow"><div><b>${esc(c.label)}</b> <span class="muted">· ${esc(c.p.name)}${c.health === "cooldown" ? " · mở lại sau " + dur(c.blocked_for) : ""}</span></div>
-        <div>${esc(c.block_reason || c.last_error || "")}</div></div><div class="acct-acts">${fixButtons(c)}</div></div>`).join("")}</div>` : ""}`;
+        <div>${esc(c.block_reason || c.last_error || "")}${c.session?.died ? (lifeOf(c.session) ? ` Cookie sống được ${lifeOf(c.session).text}, chết lúc ${when(c.session.died)}.` : ` Cookie chết lúc ${when(c.session.died)}.`) : ""}</div></div><div class="acct-acts">${fixButtons(c)}</div></div>`).join("")}</div>` : ""}`;
   }
 
   const t = d.stats.total, okp = t.n ? Math.round(100 * (t.ok || 0) / t.n) : null;
@@ -730,10 +753,19 @@ function acctMeta(p, c) {
   const bits = [];
   if (c.meta?.email) bits.push(esc(c.meta.email) + (c.meta.plan ? ` (${esc(c.meta.plan)})` : ""));
   if (c.key_hint) bits.push(`key <span class="mono">${esc(c.key_hint)}</span>`);
-  if (c.cookie_fp) bits.push(`cookie <span class="mono">${esc(c.cookie_fp)}</span>` + (c.rotated_at ? `, xoay ${ago(c.rotated_at)}` : ", chưa xoay"));
+  if (c.cookie_fp) bits.push(`cookie <span class="mono">${esc(c.cookie_fp)}</span>` + (c.last_error ? ", ngừng xoay vì phiên lỗi" : c.rotated_at ? `, xoay ${ago(c.rotated_at)}` : ", chưa xoay"));
   if (c.expires_at && p.type === "codex") bits.push(c.has_refresh ? "tự làm mới token" : `token hết hạn ${when(c.expires_at)}`);
   bits.push(c.last_used_at ? "dùng " + ago(c.last_used_at) : "chưa dùng");
   return bits.join(" · ");
+}
+function lifeLine(c) {
+  const s = c.session, l = lifeOf(s);
+  if (!l) return "";
+  if (s.died) {
+    const known = s.last_ok ? ` Lần cuối còn chạy: ${when(s.last_ok)}.` : "";
+    return `<div class="life dead">${icon("alert")}<span>Cookie sống được <b>${l.text}</b>, phát hiện chết lúc ${when(s.died)} (${esc(DEATH[s.reason] || "lỗi")}).${known}</span></div>`;
+  }
+  return `<div class="life">${icon("check")}<span>Cookie đã sống <b>${l.text}</b>${s.last_ok ? `, kiểm tra còn chạy ${ago(s.last_ok)}` : ""}.</span></div>`;
 }
 function acctRow(p, c) {
   const lbl = c.health === "cooldown" ? `Tạm khóa ${dur(c.blocked_for)}` : HEALTH[c.health];
@@ -742,11 +774,12 @@ function acctRow(p, c) {
     ? `<div class="acct-warn">Token thiếu quyền ${esc(c.meta.missing_scopes.join(", "))}. Nếu gọi bị lỗi, đăng nhập lại bằng cách “Dán callback”.</div>` : "";
   return `<div class="acct"><span class="lamp ${c.health}"></span>
     <div class="grow"><div class="row" style="gap:8px"><b>${esc(c.label)}</b>${tag(c.health, lbl)}</div>
-      <div class="acct-meta">${acctMeta(p, c)}</div>${msg ? `<div class="acct-err">${esc(msg)}</div>` : ""}${scopes}</div>
+      <div class="acct-meta">${acctMeta(p, c)}</div>${p.type === "gemini_web" ? lifeLine(c) : ""}${msg ? `<div class="acct-err">${esc(msg)}</div>` : ""}${scopes}</div>
     <div class="acct-acts">
       <button class="btn sm" onclick="testConn('${c.id}')">Gọi thử</button>
       ${p.type === "codex" ? `<button class="btn sm" onclick="quota('${c.id}')">Hạn mức</button>` : ""}
       ${p.type === "gemini_web" ? `<button class="btn sm" onclick="geminiCookie('${p.id}','${c.id}')">Dán cookie mới</button>` : ""}
+      ${p.type === "gemini_web" && (c.history || c.session) ? `<button class="btn sm" onclick="cookieHistory('${p.id}','${c.id}')">Lịch sử cookie</button>` : ""}
       ${c.health === "cooldown" || c.health === "error" ? `<button class="btn sm" onclick="resetConn('${c.id}')">Mở khóa</button>` : ""}
       <button class="btn sm ghost" onclick="toggleConn('${c.id}', ${!c.enabled})">${c.enabled ? "Tắt" : "Bật"}</button>
       <button class="btn sm ghost danger" onclick="delConn('${c.id}')">Xóa</button></div></div>`;
@@ -924,6 +957,25 @@ window.geminiCookie = (pid, cid) => {
       loadProviders();
     }));
   });
+};
+
+// ---------------------------------------------------------------- Gemini cookie history
+window.cookieHistory = (pid, cid) => {
+  const p = providers.find(x => x.id === pid), c = p?.connections.find(x => x.id === cid);
+  if (!c) return;
+  const rows = [...(c.session?.started ? [{ ...c.session, end: c.session.died ? "died" : "alive" }] : []), ...(c.history || [])];
+  const dead = rows.filter(r => r.end === "died" && r.started && r.died && !r.approx).map(r => r.died - r.started);
+  const avg = dead.length ? dead.reduce((a, b) => a + b, 0) / dead.length : null;
+  const END = { alive: `<span style="color:var(--ok)">Đang chạy</span>`, replaced: `<span class="soft">Thay cookie mới</span>` };
+  modal(`${mHead(`Lịch sử cookie: ${esc(c.label)}`, "Mỗi dòng là một lần dán cookie. Thời điểm chết là lúc UniRouter phát hiện, sai lệch tối đa khoảng 10 phút đến 1 giờ.")}
+    ${dead.length ? `<div class="stats3"><div><small>Trung bình</small><b>${span(avg)}</b></div><div><small>Ngắn nhất</small><b>${span(Math.min(...dead))}</b></div><div><small>Dài nhất</small><b>${span(Math.max(...dead))}</b></div></div>`
+      : `<p class="muted" style="margin-bottom:14px">Chưa có cookie nào chết từ khi bắt đầu đo, nên chưa tính được trung bình.</p>`}
+    <div class="panel tbl-wrap" tabindex="0" aria-label="Lịch sử cookie"><table><thead><tr><th scope="col">Dán lúc</th><th scope="col">Sống được</th><th scope="col">Kết thúc</th></tr></thead><tbody>
+      ${rows.map(r => { const l = lifeOf(r);
+        return `<tr><td style="white-space:nowrap">${r.started ? when(r.started) : "–"}</td><td style="white-space:nowrap">${l ? l.text : "–"}</td>
+          <td>${r.end === "died" ? `<span class="bad">${esc(DEATH[r.reason] || "Lỗi")}</span><div class="muted" style="font-size:12px;margin-top:2px">phát hiện ${when(r.died)}</div>` : END[r.end] || ""}</td></tr>`; }).join("")}
+    </tbody></table></div>
+    <div class="foot" style="margin-top:16px"><button class="btn" onclick="closeModal()">Đóng</button></div>`);
 };
 
 // ---------------------------------------------------------------- models
