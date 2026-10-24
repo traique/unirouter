@@ -15,6 +15,7 @@ Chỉ dùng thư viện chuẩn + curl_cffi (đã có sẵn cho Codex) để gi�
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import re
 import time
@@ -39,7 +40,83 @@ ROTATE_BODY = b'[000,"-0000000000000000000"]'
 REQUIRED_COOKIE = "__Secure-1PSID"
 # Dấu hiệu Google chặn/bắt xác minh thay vì trả trang app.
 SORRY_MARKERS = ("/sorry/", "unusual traffic", "detected unusual")
+# Chỉ những cookie này được phép thay bằng giá trị Google trả về khi xoay. Các cookie khác trong
+# phản hồi (cookie riêng của accounts.google.com, cookie xóa) không được ghi đè lên bộ cookie đăng nhập.
+ROTATABLE = {"__Secure-1PSIDTS", "__Secure-3PSIDTS", "SIDCC", "__Secure-1PSIDCC", "__Secure-3PSIDCC"}
+# Cookie đồng ý (EU): "từ chối tất cả", đủ để Google không chuyển sang consent.google.com.
+CONSENT_COOKIE = ("SOCS", "CAI")
 
+
+# Theo dõi tuổi thọ cookie (lưu trong meta của connection, không phải bí mật).
+OK_WRITE_EVERY_MS = 5 * 60 * 1000  # ghi mốc "còn sống" tối đa 5 phút một lần
+HISTORY_MAX = 20
+
+
+def _now() -> int:
+    return int(time.time() * 1000)
+
+
+def _death(kind: str, status: int, message: str, cooldown: float) -> ProviderError:
+    """ProviderError mang theo loại chết của phiên ('signed_out' | 'verify') để ghi tuổi thọ cookie."""
+    e = ProviderError(status, message, "account", cooldown)
+    e.kind = kind  # type: ignore[attr-defined]
+    return e
+
+
+def new_session_meta(meta: dict[str, Any], now: int | None = None) -> dict[str, Any]:
+    """Bắt đầu đo một cookie mới (khi dán cookie). Cookie cũ được đẩy vào lịch sử."""
+    now = now or _now()
+    meta = dict(meta)
+    old = meta.get("session") or {}
+    if old.get("started"):
+        entry = {k: old.get(k) for k in ("started", "last_ok", "died", "reason", "approx")}
+        entry["end"] = "died" if old.get("died") else "replaced"
+        if not old.get("died"):
+            entry["ended"] = now  # bị thay khi còn sống: tuổi thọ tính tới lúc thay
+        meta["history"] = ([entry] + list(meta.get("history") or []))[:HISTORY_MAX]
+    meta["session"] = {"started": now, "last_ok": None, "died": None, "reason": None}
+    return meta
+
+
+def mark_alive(store: Any, cid: str) -> None:
+    """Ghi mốc cookie còn chạy (gọi sau khi tải trang hoặc request thành công)."""
+    c = store.connections.get(cid)
+    if not c:
+        return
+    now = _now()
+    meta = dict(c.get("meta") or {})
+    sess = dict(meta.get("session") or {})
+    if not sess.get("started"):
+        # Cookie dán từ bản cũ: không biết lúc dán, bắt đầu đo từ bây giờ (tuổi thọ là con số tối thiểu).
+        sess = {"started": now, "last_ok": None, "died": None, "reason": None, "approx": True}
+    if not sess.get("died") and sess.get("last_ok") and now - sess["last_ok"] < OK_WRITE_EVERY_MS:
+        return
+    sess.update({"last_ok": now, "died": None, "reason": None})
+    meta["session"] = sess
+    store.update_connection_meta(cid, meta)
+
+
+def mark_dead(store: Any, cid: str, err: ProviderError) -> None:
+    """Ghi lần đầu phát hiện phiên chết (chỉ lần đầu, để giữ đúng thời điểm)."""
+    kind = getattr(err, "kind", None)
+    c = store.connections.get(cid)
+    if not kind or not c:
+        return
+    meta = dict(c.get("meta") or {})
+    sess = dict(meta.get("session") or {})
+    if sess.get("died"):
+        return
+    if not sess.get("started"):
+        sess = {"started": None, "last_ok": None, "approx": True}
+    sess.update({"died": _now(), "reason": kind})
+    meta["session"] = sess
+    store.update_connection_meta(cid, meta)
+
+
+class ConsentRequired(Exception):
+    """Google chuyển sang trang đồng ý cookie (IP ở châu Âu) — không phải phiên chết."""
+
+log = logging.getLogger("unirouter.gemini_web")
 _session: AsyncSession | None = None
 _locks: dict[str, asyncio.Lock] = {}
 _pages: dict[str, dict[str, Any]] = {}  # connection id -> {"at","bl","ts"}
@@ -147,32 +224,55 @@ async def fetch_page(cookies: dict[str, str], proxy: str | None = None) -> dict[
     body = resp.text or ""
     final_url = str(getattr(resp, "url", "") or "")
     low = (final_url + " " + body[:4000]).lower()
+    if "consent.google." in final_url:
+        raise ConsentRequired()
     if any(m in low for m in SORRY_MARKERS):
-        raise ProviderError(401, "Google bắt xác minh lại (/sorry/). Cookie có thể chạy từ IP lạ hoặc đã hết hạn — "
-                                 "đăng nhập lại và dán cookie mới.", "account", 600)
+        raise _death("verify", 401, "Google bắt xác minh lại (/sorry/) vì IP máy chủ. Đặt GEMINI_WEB_PROXY hoặc "
+                                    "chờ một lúc rồi bấm Mở khóa.", 600)
     at = _TOKEN_RE["at"].search(body)
     bl = _TOKEN_RE["bl"].search(body)
-    if not at or not bl:
-        # Trang không có token = chưa đăng nhập được (cookie hết hạn).
-        raise ProviderError(401, "Cookie Gemini đã hết hạn hoặc không đăng nhập được. Dán cookie mới.", "account", 300)
+    if not bl:
+        # Không có cả token phiên bản trang: không phải lỗi cookie mà là trang lạ (Google đổi giao diện).
+        raise ProviderError(502, f"Trang Gemini không đúng định dạng (HTTP {resp.status_code}). Google có thể đã "
+                                 "đổi giao diện.", "target")
+    if not at:
+        # Trang tải bình thường nhưng ở chế độ chưa đăng nhập: Google đã thu hồi phiên của cookie này.
+        raise _death("signed_out", 401, "Google đã đăng xuất phiên của cookie này. Đăng nhập lại trong cửa sổ ẩn "
+                                        "danh, dán cookie mới và đóng cửa sổ (không bấm Đăng xuất).", 300)
     return {"at": at.group(1), "bl": bl.group(1), "ok": True}
 
 
 # ------------------------------------------------------------------ rotate cookie
 def _merge_set_cookie(cookies: dict[str, str], resp: Any) -> bool:
-    """Ghép cookie mới từ các header Set-Cookie của response vào dict hiện có. True nếu có đổi."""
+    """Ghép cookie xoay mới (chỉ tên trong ROTATABLE) vào dict hiện có. True nếu có đổi.
+
+    Bỏ qua cookie Google gửi để XÓA (Max-Age=0, Expires trong quá khứ, giá trị EXPIRED/deleted):
+    ghi chúng đè lên sẽ làm hỏng phiên đăng nhập.
+    """
+    from email.utils import parsedate_to_datetime
+
     changed = False
     try:
         lines = resp.headers.get_list("set-cookie")
     except Exception:  # noqa: BLE001
         lines = []
     for line in lines:
-        pair = line.split(";", 1)[0]
-        if "=" not in pair:
+        parts = [p.strip() for p in line.split(";")]
+        if "=" not in parts[0]:
             continue
-        name, value = pair.split("=", 1)
-        name, value = name.strip(), value.strip()
-        if name and value and cookies.get(name) != value:
+        name, value = (x.strip() for x in parts[0].split("=", 1))
+        if name not in ROTATABLE or not value or value.upper() in ("EXPIRED", "DELETED"):
+            continue
+        attrs = {k.strip().lower(): v.strip() for k, _, v in (a.partition("=") for a in parts[1:])}
+        if attrs.get("max-age", "1").lstrip("-").isdigit() and int(attrs.get("max-age", "1")) <= 0:
+            continue
+        if "expires" in attrs:
+            try:
+                if parsedate_to_datetime(attrs["expires"]).timestamp() < time.time():
+                    continue
+            except (TypeError, ValueError):
+                pass
+        if cookies.get(name) != value:
             cookies[name] = value
             changed = True
     return changed
@@ -236,18 +336,60 @@ async def ensure_session(store: Any, connection: dict[str, Any], proxy: str | No
         page = _pages.get(cid)
         if refresh_page or not page or now - page["ts"] > PAGE_TTL_MS:
             try:
-                page = {**await fetch_page(cookies, proxy), "ts": now}
+                page = {**await _load_page(store, cid, cookies, proxy), "ts": now}
             except ProviderError as e:
                 if e.scope == "account":
                     _pages.pop(cid, None)
+                    mark_dead(store, cid, e)
                 raise
             _pages[cid] = page
+            mark_alive(store, cid)
         store.set_connection_error(cid, None)
         return {"cookies": cookies, "at": page["at"], "bl": page["bl"]}
 
 
-async def rotate_and_save(store: Any, connection: dict[str, Any], proxy: str | None = None) -> bool:
-    """Chỉ xoay cookie + lưu (không tải trang). Dùng cho keepalive mỗi ~10 phút, rất nhẹ."""
+async def _load_page(store: Any, cid: str, cookies: dict[str, str], proxy: str | None) -> dict[str, Any]:
+    """Tải token trang, kèm hai cách tự cứu (đang giữ khóa). `cookies` được sửa tại chỗ khi cứu được.
+
+    - Trang đồng ý cookie (EU): thêm cookie SOCS rồi tải lại.
+    - Phiên bị đăng xuất: thử bộ cookie đã chạy tốt gần nhất (cookies_good), phòng trường hợp lần xoay
+      gần nhất làm hỏng cookie. Chạy được thì khôi phục bộ đó.
+    """
+    secret = store.connection_secret(cid)
+    try:
+        try:
+            page = await fetch_page(cookies, proxy)
+        except ConsentRequired:
+            cookies[CONSENT_COOKIE[0]] = CONSENT_COOKIE[1]
+            secret = {**secret, "cookies": cookies}
+            store.update_connection_secret(cid, secret)
+            page = await fetch_page(cookies, proxy)
+    except ConsentRequired:
+        raise ProviderError(502, "Google vẫn đòi trang đồng ý cookie. Dán lại cookie có SOCS.", "account", 600)
+    except ProviderError as e:
+        good = secret.get("cookies_good") or {}
+        if e.scope != "account" or not good or good == cookies:
+            raise
+        try:
+            page = await fetch_page(good, proxy)
+        except (ProviderError, ConsentRequired):
+            raise e from None
+        log.warning("Gemini %s: phiên hiện tại bị đăng xuất, đã khôi phục bộ cookie chạy tốt gần nhất", cid)
+        cookies.clear()
+        cookies.update(good)
+        secret = {**secret, "cookies": dict(good)}
+        store.update_connection_secret(cid, secret)
+    if secret.get("cookies_good") != cookies:
+        store.update_connection_secret(cid, {**secret, "cookies": dict(cookies), "cookies_good": dict(cookies)})
+    return page
+
+
+async def rotate_and_save(store: Any, connection: dict[str, Any], proxy: str | None = None) -> bool | None:
+    """Chỉ xoay cookie + lưu (không tải trang). Dùng cho keepalive mỗi ~10 phút, rất nhẹ.
+
+    Trả về như rotate_cookies: True có cookie mới, False không đổi, None Google từ chối/lỗi mạng
+    (keepalive dùng None làm tín hiệu để kiểm tra phiên ngay thay vì chờ tới lượt kiểm tra mỗi giờ).
+    """
     cid = connection["id"]
     lock = _locks.setdefault(cid, asyncio.Lock())
     async with lock:
@@ -255,9 +397,10 @@ async def rotate_and_save(store: Any, connection: dict[str, Any], proxy: str | N
         cookies = dict(secret.get("cookies") or {})
         if REQUIRED_COOKIE not in cookies:
             return False
-        before = dict(cookies)
-        await _rotate_locked(store, cid, secret, cookies, proxy)
-        return cookies != before
+        result = await rotate_cookies(cookies, proxy)
+        if result is not None:
+            store.update_connection_secret(cid, {**secret, "cookies": cookies, "rotated_at": _now()})
+        return result
 
 
 def sapisid_hash(cookies: dict[str, str], origin: str = "https://gemini.google.com") -> str | None:

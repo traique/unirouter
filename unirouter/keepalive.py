@@ -101,11 +101,20 @@ class Keepalive:
         if "cookies" not in secret:
             return
         proxy = config.GEMINI_WEB_PROXY or None
+        broken = bool(c.get("last_error"))
         if c["enabled"] and now - self._validated.get(c["id"], 0) >= GEMINI_VALIDATE_AFTER_MS:
-            # Xoay + tải lại trang: phát hiện phiên chết sớm để trang quản trị báo đỏ, và làm mới token trang.
+            # Tải lại trang mỗi giờ: phát hiện phiên chết sớm, làm mới token trang, và (khi đang lỗi) thử
+            # khôi phục bộ cookie chạy tốt gần nhất. Phiên đang lỗi thì không xoay: xoay cookie chết vô ích.
             self._validated[c["id"]] = now
-            await gemini_web_auth.ensure_session(self.store, c, proxy, force_rotate=True, refresh_page=True)
+            await gemini_web_auth.ensure_session(self.store, c, proxy, force_rotate=not broken, refresh_page=True)
+            return
+        if broken:
             return
         last = int(secret.get("rotated_at") or 0)
         if now - last >= GEMINI_ROTATE_AFTER_MS:
-            await gemini_web_auth.rotate_and_save(self.store, c, proxy)
+            result = await gemini_web_auth.rotate_and_save(self.store, c, proxy)
+            if result is None and c["enabled"]:
+                # Google từ chối xoay: thường là phiên vừa chết. Kiểm tra ngay để ghi đúng thời điểm chết
+                # (sai số ~10 phút thay vì tới 1 giờ).
+                self._validated[c["id"]] = now
+                await gemini_web_auth.ensure_session(self.store, c, proxy, refresh_page=True)

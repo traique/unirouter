@@ -218,15 +218,16 @@ async def codex_models(request: Request):
 
 
 # ---------------------------------------------------------------- Gemini Web mock
-gw_state = {"rotations": 0, "cookie_dead": False, "at": "xsrf-tok-123"}
+gw_state = {"rotations": 0, "cookie_dead": False, "at": "xsrf-tok-123", "poison_rotate": False}
 
 
 @app.get("/gw/app")
 async def gw_app(request: Request):
     calls["gw-app"] = calls.get("gw-app", 0) + 1
     cookie = request.headers.get("cookie", "")
-    if gw_state["cookie_dead"] or "__Secure-1PSID=" not in cookie:
-        return app_html_response("<html><body>signed out</body></html>")
+    if gw_state["cookie_dead"] or "__Secure-1PSID=" not in cookie or "1PSIDTS=BADTS" in cookie:
+        # Giống Google thật: trang vẫn tải (có cfb2h) nhưng không có SNlM0e vì chưa đăng nhập
+        return app_html_response('<html><script>window.WIZ={"cfb2h":"boq_test_1"};</script>Sign in</html>')
     if "DEADPSID" in cookie:
         # mô phỏng /sorry/ (Google bắt xác minh)
         return app_html_response("<html><body>unusual traffic detected</body></html>")
@@ -242,7 +243,15 @@ def app_html_response(html: str):
 async def gw_rotate(request: Request):
     gw_state["rotations"] += 1
     from fastapi.responses import JSONResponse as JR
+    if gw_state["cookie_dead"]:
+        return JR({"error": "unauthorized"}, status_code=401)
     resp = JR({"ok": True})
+    if gw_state["poison_rotate"]:
+        # Lần xoay "xấu": một cookie xóa và một 1PSIDTS khiến phiên bị đăng xuất
+        resp.set_cookie("__Secure-1PSID", "EXPIRED", max_age=0)
+        resp.set_cookie("__Host-GAPS", "accounts-only")
+        resp.set_cookie("__Secure-1PSIDTS", "BADTS")
+        return resp
     resp.set_cookie("__Secure-1PSIDTS", f"rot-{gw_state['rotations']}")
     return resp
 
