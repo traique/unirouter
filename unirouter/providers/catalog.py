@@ -94,7 +94,7 @@ PRESETS: list[dict[str, Any]] = [
         "options": {"temporary_chats": True},
         "note": "Đăng nhập bằng cookie tài khoản gemini.google.com (dán cookie trong trang quản trị). "
                 "Dùng endpoint nội bộ của web app, KHÔNG phải API chính thức: có thể hỏng khi Google đổi "
-                "giao diện, và có rủi ro khóa tài khoản Google. Không hỗ trợ tool calling. Nên dùng tài "
+                "giao diện, và có rủi ro khóa tài khoản Google. Nhận ảnh đầu vào; không hỗ trợ tool calling. Nên dùng tài "
                 "khoản phụ. Cookie được tự xoay để giữ phiên, nhưng thỉnh thoảng vẫn phải dán lại.",
     },
     {

@@ -1049,6 +1049,14 @@ def test_gemini_rich_markup_to_markdown():
     assert "Elicitation" not in out and "<" not in out
 
 
+def test_gemini_cite_markers_removed():
+    """Dấu [cite] Gemini chèn khi trả lời về file đính kèm bị dọn, cả khi đang stream dở."""
+    from unirouter.providers.gemini_web import _safe_cut, clean_text
+    out = clean_text("* Red circle[cite: 1]\n* [cite_start]Text: CAT 42 [cite: 1, 2].\n```\nx = a[cite: 1]\n```")
+    assert out == "* Red circle\n* Text: CAT 42.\n```\nx = a[cite: 1]\n```"
+    assert clean_text(_safe_cut("Red circle[cite: 1")) == "Red circle"
+
+
 def test_keepalive_rotates_gemini_and_skips_fresh_codex(env):
     import asyncio
     from unirouter.keepalive import Keepalive

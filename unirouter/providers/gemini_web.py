@@ -48,6 +48,8 @@ _RE_CODE_BLOCK = re.compile(
     r"```(?:python|javascript|text)\?code_(?:reference|stdout)&code_event_index=\d+\n.*?```\n?",
     re.DOTALL)
 _RE_CARD = re.compile(r"http://googleusercontent\.com/card_content/\d+\n?")
+# Dấu trích dẫn Gemini chèn khi trả lời dựa trên file đính kèm: "[cite_start]", "[cite: 1]", "[cite: 1, 2]".
+_RE_CITE = re.compile(r"\[cite_(?:start|end)\]| ?\[cite:\s*\d+(?:\s*,\s*\d+)*\]")
 _RE_BARD_ERR = re.compile(r"BardErrorInfo\s*\[(\d+)\]")
 
 
@@ -93,7 +95,7 @@ def _rich_tag(m: re.Match) -> str:
 def rich_to_markdown(text: str) -> str:
     parts = re.split(r"(```.*?```)", text, flags=re.DOTALL)  # không đụng vào khối code
     for i in range(0, len(parts), 2):
-        seg = _RE_ELICIT.sub("", parts[i])
+        seg = _RE_CITE.sub("", _RE_ELICIT.sub("", parts[i]))
         seg = _RE_TAG.sub(_rich_tag, seg)
         parts[i] = re.sub(r"\n{3,}", "\n\n", seg)
     return "".join(parts)
@@ -196,10 +198,12 @@ def _extract_text(raw: str) -> str:
 
 
 def _safe_cut(text: str) -> str:
-    """Cắt bỏ thẻ <...> đang viết dở ở cuối, để phần phát ra khi stream không đổi khi thẻ đóng lại."""
-    i = text.rfind("<")
-    if i >= 0 and ">" not in text[i:]:
-        return text[:i]
+    """Cắt bỏ thẻ <...> hoặc [cite...] đang viết dở ở cuối, để phần phát ra khi stream không đổi khi
+    thẻ đóng lại (và bị dọn đi)."""
+    for open_, close in (("<", ">"), ("[", "]")):
+        i = text.rfind(open_)
+        if i >= 0 and close not in text[i:]:
+            text = text[:i]
     return text
 
 
