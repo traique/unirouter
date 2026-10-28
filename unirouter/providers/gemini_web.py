@@ -11,10 +11,16 @@ Giới hạn có chủ đích:
   - Stream: Gemini web trả bản tích lũy của câu trả lời; ta phát phần mới thêm so với bản đã phát.
     Nếu model sửa lại đoạn đã phát (hiếm), giữ bản đã phát và không ghép thêm.
   - Tự chữa: request bị từ chối (400/401/403) thì xoay cookie, tải lại token trang và gửi lại một lần.
+  - Ảnh đầu vào (image_url data:/http): upload lên máy chủ upload của Gemini web rồi đính kèm vào prompt.
+    Không đọc/upload được ảnh nào thì báo scope "target" để router thử nguồn khác, thay vì trả lời
+    như thể không có ảnh.
   - Không embeddings. (Tạo ảnh cố tình bỏ theo yêu cầu.)
 """
 from __future__ import annotations
 
+import asyncio
+import base64
+import binascii
 import json
 import re
 import time
@@ -22,12 +28,20 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from ..formats.common import messages_text  # gom messages thành 1 prompt
+from ..formats.common import message_images, messages_text  # gom messages thành 1 prompt
 from . import gemini_web_auth as gw
 from .base import CallContext, Event, Provider, ProviderError, Target
 
 STREAM_PATH = ("/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate")
 BASE = "https://gemini.google.com"
+UPLOAD_URL = "https://content-push.googleapis.com/upload"
+UPLOAD_PUSH_ID = "feeds/mcudyrk2a4khkz"  # Push-ID cố định mà web app Gemini dùng khi đính kèm file
+MAX_IMAGES = 10
+MAX_IMAGE_BYTES = 20 * 1024 * 1024
+# Prompt mặc định khi client chỉ gửi ảnh, không kèm chữ (Gemini web không nhận prompt rỗng).
+IMAGE_ONLY_PROMPT = "Describe this image."
+_EXT = {"image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp", "image/gif": "gif",
+        "image/heic": "heic", "image/heif": "heif", "image/bmp": "bmp"}
 
 # Dọn nhiễu nội bộ của Gemini khỏi câu trả lời.
 _RE_CODE_BLOCK = re.compile(
@@ -92,9 +106,12 @@ def clean_text(text: str) -> str:
 
 
 def build_payload(prompt: str, at: str, bl: str, temporary: bool = True,
-                  mode: int = 1, think: int = 4) -> tuple[str, dict[str, str]]:
+                  mode: int = 1, think: int = 4,
+                  files: list[tuple[str, str]] | None = None) -> tuple[str, dict[str, str]]:
+    """files: [(mã upload, tên file)] lấy từ upload_image()."""
     inner: list[Any] = [None] * 102
-    inner[0] = [prompt, 0, None, None, None, None, 0]
+    attach = [[[fid], name] for fid, name in files] if files else None
+    inner[0] = [prompt, 0, None, attach, None, None, 0]
     inner[1] = ["en"]
     inner[2] = ["", "", "", None, None, None, None, None, None, ""]
     inner[6] = [0]
@@ -118,6 +135,34 @@ def build_payload(prompt: str, at: str, bl: str, temporary: bool = True,
     body = {"f.req": json.dumps([None, json.dumps(inner)]), "at": at}
     from urllib.parse import urlencode
     return urlencode(body), {"bl": bl}
+
+
+def decode_data_url(url: str) -> tuple[str, bytes] | None:
+    """data:image/...;base64,... -> (content-type, bytes). None nếu không phải ảnh base64 hợp lệ."""
+    head, sep, data = url.partition(",")
+    if not sep or not head.startswith("data:") or ";base64" not in head:
+        return None
+    ctype = head[5:].split(";")[0].strip().lower() or "image/png"
+    if not ctype.startswith("image/"):
+        return None
+    try:
+        raw = base64.b64decode(data, validate=False)
+    except (binascii.Error, ValueError):
+        return None
+    return (ctype, raw) if raw else None
+
+
+async def load_image(url: str) -> tuple[str, bytes] | None:
+    if url.startswith("data:"):
+        got = decode_data_url(url)
+    elif url.startswith(("http://", "https://")):
+        from .codex import download_image
+        got = await download_image(url, MAX_IMAGE_BYTES)
+    else:
+        return None
+    if not got or len(got[1]) > MAX_IMAGE_BYTES:
+        return None
+    return got
 
 
 def _extract_line(line: str) -> str | None:
@@ -178,16 +223,52 @@ class GeminiWebProvider(Provider):
             # Web không làm tool đáng tin -> để router thử provider khác.
             raise ProviderError(400, "Gemini Web không hỗ trợ tool calling", "target")
         mode, think = resolve_mode(target.model)
-        prompt = messages_text(ctx.body.get("messages") or [])
+        messages = ctx.body.get("messages") or []
+        prompt = messages_text(messages)
+        images = message_images(messages)
         if not prompt.strip():
-            raise ProviderError(400, "Prompt rỗng", "request")
+            if not images:
+                raise ProviderError(400, "Prompt rỗng", "request")
+            prompt = IMAGE_ONLY_PROMPT
+        if len(images) > MAX_IMAGES:
+            raise ProviderError(400, f"Gemini Web nhận tối đa {MAX_IMAGES} ảnh mỗi request", "target")
         temporary = (target.provider.get("options") or {}).get("temporary_chats", True)
-        return self._run(connection, prompt, bool(temporary), mode, think, ctx.stream)
+        files = await self._upload_images(images) if images else None
+        return self._run(connection, prompt, bool(temporary), mode, think, ctx.stream, files)
+
+    async def _upload_images(self, urls: list[str]) -> list[tuple[str, str]]:
+        """Upload mọi ảnh; chỉ cần một ảnh lỗi là báo scope "target" (router thử nguồn khác)."""
+        loaded = await asyncio.gather(*(load_image(u) for u in urls))
+        for i, got in enumerate(loaded):
+            if not got:
+                raise ProviderError(400, f"Gemini Web không đọc được ảnh #{i + 1} (cần data: base64 hoặc URL "
+                                         f"công khai, tối đa {MAX_IMAGE_BYTES // (1024 * 1024)}MB)", "target")
+        names = [f"image_{i + 1}.{_EXT.get(ct, 'png')}" for i, (ct, _) in enumerate(loaded)]
+        ids = await asyncio.gather(*(self._upload(ct, data, name) for (ct, data), name in zip(loaded, names)))
+        return list(zip(ids, names))
+
+    async def _upload(self, ctype: str, data: bytes, name: str) -> str:
+        from curl_cffi import CurlMime
+
+        mime = CurlMime()
+        mime.addpart(name="file", content_type=ctype, filename=name, data=data)
+        headers = {"User-Agent": gw.UA, "Push-ID": UPLOAD_PUSH_ID, "Origin": BASE, "Referer": BASE + "/"}
+        kw = gw._kw(UPLOAD_URL, self.proxy, headers=headers, multipart=mime, timeout=60, allow_redirects=True)
+        try:
+            resp = await gw.session().post(UPLOAD_URL, **kw)
+        except Exception as e:  # noqa: BLE001 - curl_cffi.CurlError
+            raise ProviderError(502, f"Lỗi mạng khi upload ảnh lên Gemini Web: {e}", "target") from e
+        finally:
+            mime.close()
+        file_id = resp.text.strip()
+        if resp.status_code >= 400 or not file_id or "\n" in file_id:
+            raise ProviderError(502, f"Gemini Web từ chối upload ảnh (HTTP {resp.status_code})", "target")
+        return file_id
 
     async def _post(self, connection: dict[str, Any], prompt: str, temporary: bool, mode: int, think: int,
-                    refresh_page: bool) -> Any:
-        sess = await gw.ensure_session(self.store, connection, self.proxy, refresh_page=refresh_page)
-        data, params = build_payload(prompt, sess["at"], sess["bl"], temporary, mode, think)
+                    files: list[tuple[str, str]] | None = None) -> Any:
+        sess = await gw.ensure_session(self.store, connection, self.proxy)
+        data, params = build_payload(prompt, sess["at"], sess["bl"], temporary, mode, think, files)
         reqid = int(time.time()) % 1000000
         url = f"{BASE}{STREAM_PATH}?bl={params['bl']}&hl=en&_reqid={reqid}&rt=c"
         headers = {
@@ -217,15 +298,16 @@ class GeminiWebProvider(Provider):
         return resp
 
     async def _run(self, connection: dict[str, Any], prompt: str, temporary: bool,
-                   mode: int, think: int, stream: bool) -> AsyncIterator[Event]:
+                   mode: int, think: int, stream: bool,
+                   files: list[tuple[str, str]] | None = None) -> AsyncIterator[Event]:
         try:
-            resp = await self._post(connection, prompt, temporary, mode, think, False)
+            resp = await self._post(connection, prompt, temporary, mode, think, files)
         except ProviderError as e:
             if e.scope != "account":
                 raise
             # Tự chữa một lần: token trang/cookie có thể vừa đổi -> xoay cookie, tải lại trang, gửi lại.
             await gw.ensure_session(self.store, connection, self.proxy, force_rotate=True, refresh_page=True)
-            resp = await self._post(connection, prompt, temporary, mode, think, False)
+            resp = await self._post(connection, prompt, temporary, mode, think, files)
 
         emitted = ""
         final = ""

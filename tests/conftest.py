@@ -52,6 +52,7 @@ def env():
     gwa.ROTATE_URL = up + "/gw/RotateCookies"
     gemini_web.BASE = up
     gemini_web.STREAM_PATH = "/gw/stream"
+    gemini_web.UPLOAD_URL = up + "/gw/upload"
 
     app = create_app()
     st = app.state.app

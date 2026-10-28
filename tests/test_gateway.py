@@ -995,6 +995,44 @@ def test_gemini_web_model_mode_in_payload(env):
     assert inner[79] == 3 and inner[41] == [1]  # Pro + chat tạm
 
 
+def test_gemini_web_uploads_images(env):
+    """Ảnh data: được upload rồi đính kèm vào inner[0][3]; tin chỉ có ảnh vẫn có prompt."""
+    import base64 as _b64
+    import json as _json
+    from urllib.parse import parse_qs
+    png = _b64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 32).decode()
+    before = env["mock"].calls.get("gw-upload", 0)
+    r = oa(env).chat.completions.create(model="gmw/gemini-web", messages=[{"role": "user", "content": [
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{png}"}}]}])
+    assert r.choices[0].message.content == "Xin chào từ Gemini Web."
+    assert env["mock"].calls["gw-upload"] == before + 1
+    freq = parse_qs(env["mock"].last_body["gw-stream"])["f.req"][0]
+    inner = _json.loads(_json.loads(freq)[1])
+    assert inner[0][0].strip()  # không gửi prompt rỗng
+    assert inner[0][3] == [[["/contrib_service/ttl_1d/mockimg"], "image_1.png"]]
+
+
+def test_gemini_web_text_only_has_no_attachments(env):
+    import json as _json
+    from urllib.parse import parse_qs
+    oa(env).chat.completions.create(model="gmw/gemini-web", messages=[{"role": "user", "content": "x"}])
+    freq = parse_qs(env["mock"].last_body["gw-stream"])["f.req"][0]
+    assert _json.loads(_json.loads(freq)[1])[0][3] is None
+
+
+def test_gemini_web_unreadable_image_falls_back(env):
+    """Ảnh không upload được (URL nội bộ) -> scope target -> combo chuyển sang provider khác."""
+    st = env["st"]
+    before = env["mock"].calls.get("gw-stream", 0)
+    st.store.upsert_combo({"name": "gwimg", "strategy": "priority", "targets": ["gmw/gemini-web", "mk/ok"]})
+    r = oa(env).chat.completions.create(model="gwimg", messages=[{"role": "user", "content": [
+        {"type": "text", "text": "what is this"},
+        {"type": "image_url", "image_url": {"url": "http://127.0.0.1/secret.png"}}]}])
+    assert r.choices[0].message.content == "Hello from ok"
+    assert env["mock"].calls.get("gw-stream", 0) == before
+    st.store.delete_combo("gwimg")
+
+
 def test_gemini_web_unknown_model_is_request_error(env):
     st = env["st"]
     st.store.upsert_provider({"id": "gemini-web", "models": ["gemini-flash", "gemini-web", "gemini-ultra-x"]})

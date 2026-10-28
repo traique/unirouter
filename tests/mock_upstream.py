@@ -256,6 +256,17 @@ async def gw_rotate(request: Request):
     return resp
 
 
+@app.post("/gw/upload")
+async def gw_upload(request: Request):
+    calls["gw-upload"] = calls.get("gw-upload", 0) + 1
+    if request.headers.get("push-id") != "feeds/mcudyrk2a4khkz":
+        return app_text("missing push-id", 400)
+    body = await request.body()
+    if b'name="file"' not in body or b"\x89PNG" not in body:
+        return app_text("no file", 400)
+    return app_text("/contrib_service/ttl_1d/mockimg")
+
+
 @app.post("/gw/stream")
 async def gw_stream(request: Request):
     calls["gw-stream"] = calls.get("gw-stream", 0) + 1

@@ -45,6 +45,23 @@ def messages_text(messages: list[dict[str, Any]]) -> str:
     return "\n\n".join(lines)
 
 
+def message_images(messages: list[dict[str, Any]]) -> list[str]:
+    """URL ảnh (data: hoặc http/https) trong hội thoại OpenAI, theo thứ tự xuất hiện."""
+    urls: list[str] = []
+    for msg in messages:
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        for part in content:
+            if not isinstance(part, dict) or part.get("type") not in ("image_url", "input_image"):
+                continue
+            iu = part.get("image_url")
+            url = iu.get("url") if isinstance(iu, dict) else iu
+            if isinstance(url, str) and url:
+                urls.append(url)
+    return urls
+
+
 def estimate_tokens(obj: Any) -> int:
     """Ước lượng token thô (~4 ký tự/token) khi provider không trả usage."""
     text = obj if isinstance(obj, str) else json.dumps(obj, ensure_ascii=False)
