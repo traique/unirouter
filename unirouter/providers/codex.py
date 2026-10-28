@@ -175,6 +175,30 @@ async def is_public_url(url: str) -> bool:
         return False
 
 
+async def download_image(url: str, max_bytes: int = 10 * 1024 * 1024) -> tuple[str, bytes] | None:
+    """Tải ảnh từ URL công khai (chống SSRF). Trả (content-type, bytes) hoặc None nếu không tải được."""
+    try:
+        if not await is_public_url(url):
+            return None
+        async with http.client().stream("GET", url, timeout=15, follow_redirects=False) as resp:
+            # Chống DNS rebinding: kiểm tra lại IP thực sự đã kết nối (không tin lần phân giải trước)
+            stream = resp.extensions.get("network_stream")
+            peer = stream.get_extra_info("server_addr") if stream is not None else None
+            if peer and not ipaddress.ip_address(peer[0]).is_global and not http.via_proxy():
+                return None
+            ctype = resp.headers.get("content-type", "").split(";")[0].strip().lower()
+            if resp.status_code >= 300 or not ctype.startswith("image/"):
+                return None
+            data = bytearray()
+            async for chunk in resp.aiter_bytes():
+                data.extend(chunk)
+                if len(data) > max_bytes:
+                    return None
+        return ctype, bytes(data)
+    except Exception:
+        return None
+
+
 async def inline_remote_images(payload: dict[str, Any]) -> None:
     """Codex backend không tự tải ảnh từ URL -> tải về và nhúng base64 (tối đa 10MB/ảnh)."""
     jobs = []
@@ -188,27 +212,10 @@ async def inline_remote_images(payload: dict[str, Any]) -> None:
                     jobs.append(block)
 
     async def fetch(block: dict[str, Any]) -> None:
-        try:
-            url = block["image_url"]
-            if not await is_public_url(url):
-                return
-            async with http.client().stream("GET", url, timeout=15, follow_redirects=False) as resp:
-                # Chống DNS rebinding: kiểm tra lại IP thực sự đã kết nối (không tin lần phân giải trước)
-                stream = resp.extensions.get("network_stream")
-                peer = stream.get_extra_info("server_addr") if stream is not None else None
-                if peer and not ipaddress.ip_address(peer[0]).is_global and not http.via_proxy():
-                    return
-                ctype = resp.headers.get("content-type", "").split(";")[0].strip().lower()
-                if resp.status_code >= 300 or not ctype.startswith("image/"):
-                    return
-                data = bytearray()
-                async for chunk in resp.aiter_bytes():
-                    data.extend(chunk)
-                    if len(data) > 10 * 1024 * 1024:
-                        return
-            block["image_url"] = f"data:{ctype};base64,{base64.b64encode(bytes(data)).decode()}"
-        except Exception:
-            pass
+        got = await download_image(block["image_url"])
+        if got:
+            ctype, data = got
+            block["image_url"] = f"data:{ctype};base64,{base64.b64encode(data).decode()}"
 
     if jobs:
         await asyncio.gather(*(fetch(b) for b in jobs[:8]))

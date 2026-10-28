@@ -995,6 +995,70 @@ def test_gemini_web_model_mode_in_payload(env):
     assert inner[79] == 3 and inner[41] == [1]  # Pro + chat tạm
 
 
+def test_gemini_web_uploads_images(env):
+    """Ảnh data: được upload rồi đính kèm vào inner[0][3]; tin chỉ có ảnh vẫn có prompt."""
+    import base64 as _b64
+    import json as _json
+    from urllib.parse import parse_qs
+    png = _b64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 32).decode()
+    before = env["mock"].calls.get("gw-upload", 0)
+    r = oa(env).chat.completions.create(model="gmw/gemini-web", messages=[{"role": "user", "content": [
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{png}"}}]}])
+    assert r.choices[0].message.content == "Xin chào từ Gemini Web."
+    assert env["mock"].calls["gw-upload"] == before + 1
+    freq = parse_qs(env["mock"].last_body["gw-stream"])["f.req"][0]
+    inner = _json.loads(_json.loads(freq)[1])
+    assert inner[0][0].strip()  # không gửi prompt rỗng
+    assert inner[0][3] == [[["/contrib_service/ttl_1d/mockimg"], "image_1.png"]]
+
+
+def test_gemini_web_image_upload_cached(env):
+    """Ảnh lặp lại (trong cùng request hoặc ở lượt sau) chỉ upload một lần."""
+    import base64 as _b64
+    import json as _json
+    from urllib.parse import parse_qs
+    url = "data:image/png;base64," + _b64.b64encode(b"\x89PNG\r\n\x1a\n" + b"cache-test" * 8).decode()
+    img = {"type": "image_url", "image_url": {"url": url}}
+    before = env["mock"].calls.get("gw-upload", 0)
+    turn1 = [{"role": "user", "content": [{"type": "text", "text": "so sánh"}, img, img]}]
+    oa(env).chat.completions.create(model="gmw/gemini-web", messages=turn1)
+    assert env["mock"].calls["gw-upload"] == before + 1
+    turn2 = turn1 + [{"role": "assistant", "content": "giống nhau"}, {"role": "user", "content": "chắc chưa?"}]
+    oa(env).chat.completions.create(model="gmw/gemini-web", messages=turn2)
+    assert env["mock"].calls["gw-upload"] == before + 1
+    freq = parse_qs(env["mock"].last_body["gw-stream"])["f.req"][0]
+    files = _json.loads(_json.loads(freq)[1])[0][3]
+    assert [f[0] for f in files] == [["/contrib_service/ttl_1d/mockimg"]] * 2
+
+
+def test_gemini_upload_ttl():
+    from unirouter.providers.gemini_web import upload_ttl
+    assert upload_ttl("/contrib_service/ttl_1d/abc") == 86400 * 0.8
+    assert upload_ttl("/contrib_service/ttl_6h/abc") == 6 * 3600 * 0.8
+    assert upload_ttl("/something/else") == 3600
+
+
+def test_gemini_web_text_only_has_no_attachments(env):
+    import json as _json
+    from urllib.parse import parse_qs
+    oa(env).chat.completions.create(model="gmw/gemini-web", messages=[{"role": "user", "content": "x"}])
+    freq = parse_qs(env["mock"].last_body["gw-stream"])["f.req"][0]
+    assert _json.loads(_json.loads(freq)[1])[0][3] is None
+
+
+def test_gemini_web_unreadable_image_falls_back(env):
+    """Ảnh không upload được (URL nội bộ) -> scope target -> combo chuyển sang provider khác."""
+    st = env["st"]
+    before = env["mock"].calls.get("gw-stream", 0)
+    st.store.upsert_combo({"name": "gwimg", "strategy": "priority", "targets": ["gmw/gemini-web", "mk/ok"]})
+    r = oa(env).chat.completions.create(model="gwimg", messages=[{"role": "user", "content": [
+        {"type": "text", "text": "what is this"},
+        {"type": "image_url", "image_url": {"url": "http://127.0.0.1/secret.png"}}]}])
+    assert r.choices[0].message.content == "Hello from ok"
+    assert env["mock"].calls.get("gw-stream", 0) == before
+    st.store.delete_combo("gwimg")
+
+
 def test_gemini_web_unknown_model_is_request_error(env):
     st = env["st"]
     st.store.upsert_provider({"id": "gemini-web", "models": ["gemini-flash", "gemini-web", "gemini-ultra-x"]})
@@ -1009,6 +1073,14 @@ def test_gemini_rich_markup_to_markdown():
     out = clean_text(raw)
     assert "### Greeting" in out and "**Xin chào** (sin chow)" in out
     assert "Elicitation" not in out and "<" not in out
+
+
+def test_gemini_cite_markers_removed():
+    """Dấu [cite] Gemini chèn khi trả lời về file đính kèm bị dọn, cả khi đang stream dở."""
+    from unirouter.providers.gemini_web import _safe_cut, clean_text
+    out = clean_text("* Red circle[cite: 1]\n* [cite_start]Text: CAT 42 [cite: 1, 2].\n```\nx = a[cite: 1]\n```")
+    assert out == "* Red circle\n* Text: CAT 42.\n```\nx = a[cite: 1]\n```"
+    assert clean_text(_safe_cut("Red circle[cite: 1")) == "Red circle"
 
 
 def test_keepalive_rotates_gemini_and_skips_fresh_codex(env):
