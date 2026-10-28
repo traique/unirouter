@@ -12,6 +12,7 @@ Giới hạn có chủ đích:
     Nếu model sửa lại đoạn đã phát (hiếm), giữ bản đã phát và không ghép thêm.
   - Tự chữa: request bị từ chối (400/401/403) thì xoay cookie, tải lại token trang và gửi lại một lần.
   - Ảnh đầu vào (image_url data:/http): upload lên máy chủ upload của Gemini web rồi đính kèm vào prompt.
+    Mã file được cache theo nội dung ảnh nên ảnh lặp lại trong lịch sử hội thoại chỉ upload một lần.
     Không đọc/upload được ảnh nào thì báo scope "target" để router thử nguồn khác, thay vì trả lời
     như thể không có ảnh.
   - Không embeddings. (Tạo ảnh cố tình bỏ theo yêu cầu.)
@@ -21,10 +22,12 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import hashlib
 import json
 import re
 import time
 import uuid
+from collections import OrderedDict
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -40,6 +43,12 @@ MAX_IMAGES = 10
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 # Prompt mặc định khi client chỉ gửi ảnh, không kèm chữ (Gemini web không nhận prompt rỗng).
 IMAGE_ONLY_PROMPT = "Describe this image."
+UPLOAD_CACHE_MAX = 512
+# Cache mã file đã upload theo sha256 nội dung ảnh: bot gửi lại cả lịch sử mỗi lượt nên ảnh cũ không phải
+# upload lại. Google giữ file theo hạn ghi trong mã (".../ttl_1d/..."); cache hết hạn sớm hơn để chắc chắn.
+_upload_cache: OrderedDict[str, tuple[str, float]] = OrderedDict()  # sha256 -> (mã file, hết hạn epoch)
+_uploading: dict[str, asyncio.Task] = {}  # cùng ảnh đang upload dở -> dùng chung một lần upload
+_RE_TTL = re.compile(r"/ttl_(\d+)([dh])/")
 _EXT = {"image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp", "image/gif": "gif",
         "image/heic": "heic", "image/heif": "heif", "image/bmp": "bmp"}
 
@@ -167,6 +176,14 @@ async def load_image(url: str) -> tuple[str, bytes] | None:
     return got
 
 
+def upload_ttl(file_id: str) -> float:
+    """Số giây được dùng lại mã file: 80% hạn Google ghi trong mã, không rõ hạn thì 1 giờ."""
+    m = _RE_TTL.search(file_id)
+    if not m:
+        return 3600.0
+    return int(m.group(1)) * (86400 if m.group(2) == "d" else 3600) * 0.8
+
+
 def _extract_line(line: str) -> str | None:
     """Chữ trả lời trong một dòng wrb.fr (None nếu dòng không phải khối trả lời)."""
     if '"wrb.fr"' not in line:
@@ -248,8 +265,27 @@ class GeminiWebProvider(Provider):
                 raise ProviderError(400, f"Gemini Web không đọc được ảnh #{i + 1} (cần data: base64 hoặc URL "
                                          f"công khai, tối đa {MAX_IMAGE_BYTES // (1024 * 1024)}MB)", "target")
         names = [f"image_{i + 1}.{_EXT.get(ct, 'png')}" for i, (ct, _) in enumerate(loaded)]
-        ids = await asyncio.gather(*(self._upload(ct, data, name) for (ct, data), name in zip(loaded, names)))
+        ids = await asyncio.gather(*(self._upload_cached(ct, data, name) for (ct, data), name in zip(loaded, names)))
         return list(zip(ids, names))
+
+    async def _upload_cached(self, ctype: str, data: bytes, name: str) -> str:
+        key = hashlib.sha256(data).hexdigest()
+        hit = _upload_cache.get(key)
+        if hit and hit[1] > time.time():
+            _upload_cache.move_to_end(key)
+            return hit[0]
+        task = _uploading.get(key)
+        if task is None:
+            task = asyncio.ensure_future(self._upload(ctype, data, name))
+            _uploading[key] = task
+            # đánh dấu đã đọc lỗi để không bị log "exception was never retrieved" khi mọi request chờ đã hủy
+            task.add_done_callback(lambda t: (_uploading.pop(key, None), t.cancelled() or t.exception()))
+        file_id = await asyncio.shield(task)  # một request bị hủy không hủy upload mà request khác đang chờ
+        _upload_cache[key] = (file_id, time.time() + upload_ttl(file_id))
+        _upload_cache.move_to_end(key)
+        while len(_upload_cache) > UPLOAD_CACHE_MAX:
+            _upload_cache.popitem(last=False)
+        return file_id
 
     async def _upload(self, ctype: str, data: bytes, name: str) -> str:
         from curl_cffi import CurlMime

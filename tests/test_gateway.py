@@ -1012,6 +1012,32 @@ def test_gemini_web_uploads_images(env):
     assert inner[0][3] == [[["/contrib_service/ttl_1d/mockimg"], "image_1.png"]]
 
 
+def test_gemini_web_image_upload_cached(env):
+    """Ảnh lặp lại (trong cùng request hoặc ở lượt sau) chỉ upload một lần."""
+    import base64 as _b64
+    import json as _json
+    from urllib.parse import parse_qs
+    url = "data:image/png;base64," + _b64.b64encode(b"\x89PNG\r\n\x1a\n" + b"cache-test" * 8).decode()
+    img = {"type": "image_url", "image_url": {"url": url}}
+    before = env["mock"].calls.get("gw-upload", 0)
+    turn1 = [{"role": "user", "content": [{"type": "text", "text": "so sánh"}, img, img]}]
+    oa(env).chat.completions.create(model="gmw/gemini-web", messages=turn1)
+    assert env["mock"].calls["gw-upload"] == before + 1
+    turn2 = turn1 + [{"role": "assistant", "content": "giống nhau"}, {"role": "user", "content": "chắc chưa?"}]
+    oa(env).chat.completions.create(model="gmw/gemini-web", messages=turn2)
+    assert env["mock"].calls["gw-upload"] == before + 1
+    freq = parse_qs(env["mock"].last_body["gw-stream"])["f.req"][0]
+    files = _json.loads(_json.loads(freq)[1])[0][3]
+    assert [f[0] for f in files] == [["/contrib_service/ttl_1d/mockimg"]] * 2
+
+
+def test_gemini_upload_ttl():
+    from unirouter.providers.gemini_web import upload_ttl
+    assert upload_ttl("/contrib_service/ttl_1d/abc") == 86400 * 0.8
+    assert upload_ttl("/contrib_service/ttl_6h/abc") == 6 * 3600 * 0.8
+    assert upload_ttl("/something/else") == 3600
+
+
 def test_gemini_web_text_only_has_no_attachments(env):
     import json as _json
     from urllib.parse import parse_qs
